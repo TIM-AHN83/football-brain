@@ -1,0 +1,168 @@
+// 화면·HUD·결과 리포트·랭킹 표시
+import { AGE_LABEL } from './store.js';
+
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export const AXES = [['judge', '판단'], ['speed', '속도'], ['vision', '시야'], ['call', '콜'], ['scan', '스캔'], ['brake', '멈춤']];
+const TIPS = {
+  judge: '수비수가 보였던 쪽의 반대로 패스해요. 훈련장 "플래시 패스" 레벨 1~3으로 감을 먼저 잡아요.',
+  speed: '보자마자 손가락이 나가도록! "플래시 패스"를 하루 3판, 반응 시간이 줄어드는 걸 확인해요.',
+  vision: '화면 가운데만 보지 말고 양쪽 친구를 동시에 시야에 두어요. 멀리 작게 보이는 수비수도 놓치지 않기.',
+  call: '패스할 때 "7번 패스!"처럼 번호와 함께 크게 외쳐요. 실제 경기에서도 동료가 먼저 움직일 수 있어요.',
+  scan: '공 받기 전에 폰(고개)을 좌우로 한 번씩 돌려 봐요. 잘하는 선수는 공 받기 전 10초 동안 5~8번 주변을 살펴요.',
+  brake: '휘슬이 울리면 손을 멈춰요. 급할 때 한 번 멈추는 힘이 실수를 줄여 줘요.',
+};
+export function grade(bi) { return bi >= 90 ? '월드클래스' : bi >= 75 ? '국가대표' : bi >= 60 ? '주전' : bi >= 40 ? '유망주' : '루키'; }
+
+export class UI {
+  constructor() {
+    this.el = {
+      hud: $('#hud'), score: $('#hud-score'), level: $('#hud-level'), combo: $('#hud-combo'), lives: $('#hud-lives'), attack: $('#hud-attack'),
+      callout: $('#hud-callout'), center: $('#hud-center'), pop: $('#hud-pop'), voice: $('#hud-voice'), timer: $('#hud-timer'), timerBar: $('#hud-timer i'),
+      hint: $('#hud-hint'), feet: $('#m-feet'), mic: $('#m-mic'), mot: $('#mot-choices'), edgeL: $('#fx-edge-l'), edgeR: $('#fx-edge-r'), flash: $('#fx-flash'), toast: $('#toast'),
+    };
+    this._feet = -1;
+  }
+  // 화면 전환: go = 주 화면(나머지 닫기), open/close = 위에 겹치는 시트
+  go(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('show', s.id === id)); }
+  open(id) { $('#' + id).classList.add('show'); const f = $('#' + id).querySelector('input:not([type=checkbox])'); if (f && !matchMedia('(pointer:coarse)').matches) setTimeout(() => f.focus({ preventScroll: true }), 50); }
+  close(id) { $('#' + id).classList.remove('show'); }
+  isOpen(id) { return $('#' + id).classList.contains('show'); }
+
+  hud(on) { this.el.hud.hidden = !on; if (!on) { this.el.voice.classList.remove('show'); this.el.callout.classList.remove('show'); } }
+  setScore(n) { this.el.score.textContent = Math.round(n).toLocaleString('ko-KR'); }
+  setLevel(n) { this.el.level.textContent = n; }
+  setCombo(m) { const on = m > 1.05; this.el.combo.hidden = !on; if (on) this.el.combo.textContent = 'x' + m.toFixed(1); }
+  setLives(n, max) { this.el.lives.innerHTML = max ? Array.from({ length: max }, (_, i) => `<i class="${i < n ? '' : 'lost'}"></i>`).join('') : ''; }
+  attack(total, idx) {
+    if (!total) { this.el.attack.innerHTML = ''; return; }
+    let h = ''; for (let i = 0; i < total; i++) h += `<i class="${i < idx ? 'done' : i === idx ? 'cur' : ''}"></i>`;
+    h += `<i class="goal" style="${idx >= total ? 'background:var(--sun);border-color:var(--sun)' : ''}"></i>`;
+    this.el.attack.innerHTML = h;
+  }
+  callout(text, cls = '', ms = 1200) {
+    const c = this.el.callout; c.textContent = text; c.className = 'callout show ' + cls;
+    clearTimeout(this._co); this._co = setTimeout(() => c.classList.remove('show'), ms);
+  }
+  center(text, cls = '') {
+    const c = this.el.center; c.className = 'hud-center'; void c.offsetWidth; c.textContent = text; c.className = 'hud-center show ' + cls;
+    clearTimeout(this._ce); this._ce = setTimeout(() => { c.className = 'hud-center'; }, 950);
+  }
+  pop(text, cls = '') {
+    const p = document.createElement('div'); p.className = 'pop ' + cls; p.textContent = text;
+    this.el.pop.appendChild(p); setTimeout(() => p.remove(), 1150);
+    while (this.el.pop.children.length > 4) this.el.pop.firstChild.remove();
+  }
+  voice(text, ok) {
+    const v = this.el.voice; v.textContent = '🎙 ' + text; v.classList.add('show'); v.classList.toggle('ok', !!ok);
+    clearTimeout(this._vo); this._vo = setTimeout(() => v.classList.remove('show'), 1600);
+  }
+  timer(frac) {
+    if (frac == null) { this.el.timer.classList.remove('show'); return; }
+    this.el.timer.classList.add('show'); this.el.timerBar.style.transform = `scaleX(${Math.max(0, Math.min(1, frac))})`;
+  }
+  edges(on) { this.el.edgeL.classList.toggle('on', on); this.el.edgeR.classList.toggle('on', on); }
+  flash(bad) { const f = this.el.flash; f.classList.toggle('bad', !!bad); f.classList.add('on'); setTimeout(() => f.classList.remove('on'), 60); }
+  feet(frac) {
+    if (frac == null) { if (this._feet !== -2) { this.el.feet.hidden = true; this._feet = -2; } return; }
+    if (Math.abs(frac - this._feet) < .03) return;
+    this._feet = frac; this.el.feet.hidden = false; this.el.feet.querySelector('i').style.setProperty('--v', Math.round(frac * 100) + '%');
+  }
+  mic(state) { const m = this.el.mic; m.hidden = !state || state === 'off'; m.classList.toggle('live', state === 'live'); m.classList.toggle('hear', state === 'hear'); }
+  hint(mode) {
+    const h = this.el.hint;
+    h.hidden = mode === 'mot';
+    if (mode === 'shot') h.innerHTML = '<span><em>탭 1</em>← 왼쪽 슛</span><span></span><span><em>탭 2</em>오른쪽 슛 →</span>';
+    else h.innerHTML = '<span><em>탭 1</em>← 왼쪽</span><span><em>꾹</em>↑ 돌파</span><span><em>탭 2</em>오른쪽 →</span>';
+  }
+  motChoices(nums, cb) {
+    const m = this.el.mot; m.hidden = false;
+    m.innerHTML = nums.map(n => `<button type="button" data-n="${n}">${n}</button>`).join('');
+    m.querySelectorAll('button').forEach(b => b.addEventListener('click', () => cb(+b.dataset.n)));
+  }
+  motMark(num, ok, right) {
+    this.el.mot.querySelectorAll('button').forEach(b => { const n = +b.dataset.n; if (n === right) b.classList.add('right'); else if (n === num && !ok) b.classList.add('wrong'); b.disabled = true; });
+  }
+  motHide() { this.el.mot.hidden = true; this.el.mot.innerHTML = ''; }
+  toast(msg, ms = 2400) { const t = this.el.toast; t.textContent = msg; t.classList.add('show'); clearTimeout(this._to); this._to = setTimeout(() => t.classList.remove('show'), ms); }
+
+  // ---------- 결과 ----------
+  drawRadar(cv, axes, opts = {}) {
+    const g = cv.getContext('2d'), W = cv.width, H = cv.height, cx = W / 2, cy = H / 2, R = Math.min(W, H) * (opts.r || .34);
+    const css = getComputedStyle(document.documentElement);
+    const col = (n, d) => (css.getPropertyValue(n) || d).trim() || d;
+    const sun = col('--sun', '#ffc93c'), mist = col('--mist', '#a9b6d3'), chalk = col('--chalk', '#f4f6fb');
+    g.clearRect(0, 0, W, H);
+    const pt = (i, v) => { const a = -Math.PI / 2 + i / AXES.length * Math.PI * 2; return [cx + Math.cos(a) * R * v, cy + Math.sin(a) * R * v]; };
+    g.lineWidth = 1;
+    for (const ring of [.25, .5, .75, 1]) {
+      g.beginPath(); AXES.forEach((_, i) => { const [x, y] = pt(i, ring); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath();
+      g.strokeStyle = 'rgba(169,182,211,' + (ring === 1 ? .45 : .18) + ')'; g.stroke();
+    }
+    AXES.forEach((_, i) => { const [x, y] = pt(i, 1); g.beginPath(); g.moveTo(cx, cy); g.lineTo(x, y); g.strokeStyle = 'rgba(169,182,211,.18)'; g.stroke(); });
+    g.beginPath(); AXES.forEach(([k], i) => { const [x, y] = pt(i, Math.max(.04, axes[k] ?? 0)); i ? g.lineTo(x, y) : g.moveTo(x, y); }); g.closePath();
+    g.fillStyle = 'rgba(255,201,60,.28)'; g.fill(); g.lineWidth = 2.5; g.strokeStyle = sun; g.stroke();
+    AXES.forEach(([k], i) => { if (axes[k] == null) return; const [x, y] = pt(i, Math.max(.04, axes[k])); g.beginPath(); g.arc(x, y, 3.5, 0, 7); g.fillStyle = sun; g.fill(); });
+    g.font = `700 ${Math.round(W * .05)}px "Noto Sans KR",sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    AXES.forEach(([k, label], i) => {
+      const [x, y] = pt(i, 1.24); const v = axes[k];
+      g.fillStyle = v == null ? 'rgba(169,182,211,.5)' : chalk; g.fillText(label, x, y - W * .025);
+      g.fillStyle = v == null ? 'rgba(169,182,211,.5)' : mist; g.font = `600 ${Math.round(W * .042)}px "Barlow Condensed",sans-serif`;
+      g.fillText(v == null ? '–' : Math.round(v * 100), x, y + W * .03); g.font = `700 ${Math.round(W * .05)}px "Noto Sans KR",sans-serif`;
+    });
+  }
+
+  renderResult(s) {
+    $('#res-mode').textContent = s.ranked ? '챌린지 결과' : `훈련장 · ${s.title}`;
+    $('#res-score').textContent = s.score.toLocaleString('ko-KR');
+    $('#res-sub').textContent = `LV ${s.level} · 정확도 ${s.accuracy}% · ${s.correct}/${s.decisions}`;
+    $('#res-bi').textContent = s.brainIndex; $('#res-grade').textContent = grade(s.brainIndex);
+    this.drawRadar($('#radar'), s.axes);
+    const cells = [
+      ['평균 반응', s.avgRt ? `${s.avgRt}<small>ms</small>` : '–'],
+      [s.mode === 'mot' ? '등번호 기억' : '최단 플래시', s.mode === 'mot' ? `${s.mot[0]}<small>/${s.mot[1]}</small>` : (s.minFlash ? `${s.minFlash}<small>ms</small>` : '–')],
+      ['콜 성공', s.voiceOn ? `${s.calls}<small>/${s.callChances}</small>` : '<small>꺼짐</small>'],
+      ['스캔', `${s.scanPerMin}<small>/분</small>`],
+      [s.mode === 'challenge' ? '골' : '멈춤 성공', s.mode === 'challenge' ? `${s.goals}<small>/${s.shots}</small>` : (s.whistle[1] ? `${s.whistle[0]}<small>/${s.whistle[1]}</small>` : '–')],
+      ['발 움직임', s.feetOn ? `${s.stepsPerMin}<small>걸음/분</small>` : '<small>꺼짐</small>'],
+    ];
+    $('#res-stats').innerHTML = cells.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+    let weakest = null, wv = 2;
+    for (const [k] of AXES) { const v = s.axes[k]; if (v != null && v < wv) { wv = v; weakest = k; } }
+    $('#res-coach').innerHTML = `<b>코치 한마디</b> · ${esc(TIPS[weakest] || TIPS.judge)}`;
+  }
+
+  renderRanking(rows, me, emptyMsg) {
+    const list = $('#rank-list');
+    if (!rows || !rows.length) { list.innerHTML = `<li class="rank-empty" style="display:block">${esc(emptyMsg || '아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!')}</li>`; return; }
+    list.innerHTML = rows.map(r => `<li class="${me && r.nick === me ? 'me' : ''}">
+      <span class="r">${r.rank}</span>
+      <span class="n"><b>${esc(r.nick)}</b><small>${esc([AGE_LABEL[r.age_group] || '', r.team || ''].filter(Boolean).join(' · '))}${r.accuracy != null ? ` · 정확도 ${r.accuracy}%` : ''}</small></span>
+      <span class="s">${Number(r.score).toLocaleString('ko-KR')}<small>LV ${r.level}${r.brain_index ? ` · 지수 ${r.brain_index}` : ''}</small></span></li>`).join('');
+  }
+}
+
+// 인스타 스토리용 결과 카드 (1080×1920)
+export async function shareCard(s, profile, url, ui) {
+  const W = 1080, H = 1920, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 0, H); bg.addColorStop(0, '#16264a'); bg.addColorStop(1, '#0b1428'); g.fillStyle = bg; g.fillRect(0, 0, W, H);
+  // 경기장 라인
+  g.strokeStyle = 'rgba(244,246,251,.08)'; g.lineWidth = 6; g.strokeRect(90, 1150, 900, 700); g.beginPath(); g.arc(540, 1150, 170, 0, Math.PI); g.stroke();
+  g.fillStyle = '#ffc93c'; g.fillRect(90, 150, 14, 250);
+  g.fillStyle = '#f4f6fb'; g.font = 'italic 800 150px "Barlow Condensed",sans-serif'; g.textBaseline = 'alphabetic';
+  g.fillText('FOOTBALL', 130, 270); g.fillStyle = '#ffc93c'; g.fillText('BRAIN', 130, 400);
+  g.fillStyle = '#f4f6fb'; g.font = '400 54px "Black Han Sans",sans-serif'; g.fillText('축구 두뇌 훈련', 136, 480);
+  g.fillStyle = '#a9b6d3'; g.font = '700 40px "Noto Sans KR",sans-serif';
+  g.fillText(`${profile?.nick || '선수'} · ${AGE_LABEL[profile?.age] || ''}${profile?.team ? ' · ' + profile.team : ''}`, 136, 580);
+  g.fillStyle = '#f4f6fb'; g.font = 'italic 800 230px "Barlow Condensed",sans-serif'; g.fillText(s.score.toLocaleString('ko-KR'), 120, 820);
+  g.fillStyle = '#a9b6d3'; g.font = '600 52px "Barlow Condensed",sans-serif'; g.fillText(`LV ${s.level}  ·  정확도 ${s.accuracy}%  ·  반응 ${s.avgRt || '-'}ms`, 136, 900);
+  const rc = document.createElement('canvas'); rc.width = 600; rc.height = 600; ui.drawRadar(rc, s.axes, { r: .3 });
+  g.drawImage(rc, 60, 960, 600, 600);
+  g.fillStyle = '#a9b6d3'; g.font = '700 40px "Noto Sans KR",sans-serif'; g.fillText('축구 두뇌 지수', 700, 1170);
+  g.fillStyle = '#ffc93c'; g.font = '800 220px "Barlow Condensed",sans-serif'; g.fillText(String(s.brainIndex), 690, 1370);
+  g.fillStyle = '#f4f6fb'; g.font = '400 60px "Black Han Sans",sans-serif'; g.fillText(grade(s.brainIndex), 700, 1450);
+  g.fillStyle = '#ffc93c'; g.fillRect(90, 1640, 900, 150);
+  g.fillStyle = '#0b1428'; g.font = '400 50px "Black Han Sans",sans-serif'; g.textAlign = 'center'; g.fillText('너도 도전해 봐!  수비수는 0.3초만 보여', 540, 1712);
+  g.font = '700 36px "Noto Sans KR",sans-serif'; g.fillText(`@halftime.parenttalk  ·  ${url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`, 540, 1768);
+  return await new Promise(res => c.toBlob(res, 'image/png'));
+}

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0b1428"/>
+  <circle cx="256" cy="256" r="150" fill="#f4f6fb"/>
+  <path d="M256 168l62 45-24 73h-76l-24-73z" fill="#16264a"/>
+  <path d="M256 106v62M394 212l-76 1M352 380l-58-94M160 380l58-94M118 212l76 1" stroke="#16264a" stroke-width="14" fill="none"/>
+  <path d="M60 430L452 82" stroke="#ffc93c" stroke-width="34" stroke-linecap="round"/>
+  <text x="256" y="476" text-anchor="middle" font-family="Arial Narrow,Arial,sans-serif" font-weight="800" font-style="italic" font-size="64" fill="#ffc93c">BRAIN</text>
+</svg>
