@@ -14,8 +14,8 @@ export class AudioFX {
       // 리미터 하나만 (브라우저 압축기는 자동 보정 이득이 있어 두 단을 쓰면 소리가 커진다)
       this.comp.threshold.value = -6; this.comp.knee.value = 0; this.comp.ratio.value = 20; this.comp.attack.value = .002; this.comp.release.value = .1;
       this.master.connect(this.comp); this.comp.connect(c.destination);
-      this.noise = this.makeNoise(2, false); this.pink = this.makeNoise(4, true);
-      this.setMode(this.mode); this.startCrowd(); this.loadFiles();
+      this.noise = this.makeNoise(2, false); // 킥·골망·발소리처럼 짧은 소리에만 쓴다
+      this.setMode(this.mode); this.loadFiles();
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
@@ -38,7 +38,7 @@ export class AudioFX {
       try {
         const r = await fetch(`sfx/${f}.mp3`); if (!r.ok) continue;
         this.buf[f] = await this.ctx.decodeAudioData(await r.arrayBuffer());
-        if (f === 'crowd') this.startCrowd(true);
+        if (f === 'crowd') this.startCrowd();
       } catch (e) { /* 파일 없음 → 합성음 */ }
     }
   }
@@ -51,31 +51,30 @@ export class AudioFX {
   src(buf, loop = false) { const s = this.ctx.createBufferSource(); s.buffer = buf; s.loop = loop; return s; }
   filt(type, f, Q = 1) { const b = this.ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = Q; return b; }
 
-  // 관중 웅성거림 (계속 흐름)
-  startCrowd(file = false) {
-    const c = this.ctx; if (!c) return;
+  // 관중 배경: 실제 녹음 파일(web/sfx/crowd.mp3)이 있을 때만 튼다.
+  // (예전에는 잡음을 걸러 만든 웅성거림을 계속 틀었는데, 크기가 오르내려 파도 소리처럼 들려서 2026-11-10 뺐다)
+  startCrowd() {
+    const c = this.ctx; if (!c || !this.buf.crowd) return;
     if (this.crowdNodes) { this.crowdNodes.forEach(n => { try { n.stop(); } catch (e) { /* 이미 멈춤 */ } }); }
     this.crowdGain = this.crowdGain || c.createGain(); this.crowdGain.gain.value = .36 * this.duck; this.crowdGain.connect(this.master);
-    if (file && this.buf.crowd) { const s = this.src(this.buf.crowd, true); s.connect(this.crowdGain); s.start(); this.crowdNodes = [s]; return; }
-    const a = this.src(this.pink, true), b = this.src(this.noise, true);
-    const fa = this.filt('bandpass', 520, .6), fb = this.filt('bandpass', 1500, 1.2);
-    this.swell = c.createGain(); this.swell.gain.value = .25;
-    a.connect(fa); fa.connect(this.crowdGain); b.connect(fb); fb.connect(this.swell); this.swell.connect(this.crowdGain);
-    a.start(); b.start(Math.random()); this.crowdNodes = [a, b];
-    clearInterval(this.swellTimer);
-    this.swellTimer = setInterval(() => { if (this.swell) this.swell.gain.setTargetAtTime(.12 + Math.random() * .35, c.currentTime, .6); }, 900);
+    const s = this.src(this.buf.crowd, true); s.connect(this.crowdGain); s.start(); this.crowdNodes = [s];
   }
 
+  // 골 환호: 부모들의 '와!' (모음 '아' 울림통을 거친 목소리 여러 개, 잡음 없음)
   cheer(power = 1) {
     if (!this.ctx) return; if (this.playBuf('cheer', .9 * power)) return;
     const c = this.ctx, t = c.currentTime;
-    const s = this.src(this.pink), f = this.filt('bandpass', 900, .7), g = c.createGain();
-    f.frequency.setValueAtTime(700, t); f.frequency.linearRampToValueAtTime(1300, t + .8);
-    s.connect(f); f.connect(g); g.connect(this.master); this.env(g, t, .25, 3.4 * power, 2.6); s.start(t); s.stop(t + 3.2);
-    for (let i = 0; i < 7; i++) { // '와아' 성분
-      const o = c.createOscillator(), og = c.createGain(), lp = this.filt('lowpass', 1100, .8);
-      o.type = 'sawtooth'; o.frequency.setValueAtTime(260 + Math.random() * 260, t); o.frequency.linearRampToValueAtTime(320 + Math.random() * 320, t + 1);
-      o.connect(lp); lp.connect(og); og.connect(this.master); this.env(og, t + Math.random() * .15, .3, .09 * power, 2); o.start(t); o.stop(t + 2.8);
+    const bus = c.createGain(); bus.gain.value = 6.6 * power; // 가장 큰 1초 RMS ≈ -18.5 dBFS (예전 환호 -17.3과 비슷하게), 피크 -1.8 이하
+    // 모음 '아'의 울림(포먼트 800·1200·2600Hz)
+    [[800, 6, 1], [1200, 7, .55], [2600, 9, .18]].forEach(([f, q, v]) => {
+      const bp = this.filt('bandpass', f, q), g = c.createGain(); g.gain.value = v; bus.connect(bp); bp.connect(g); g.connect(this.master);
+    });
+    for (let i = 0; i < 9; i++) {
+      const o = c.createOscillator(), og = c.createGain(), vib = c.createOscillator(), vg = c.createGain();
+      const f0 = (i % 3 === 0 ? 300 : 200) + Math.random() * 120, t0 = t + Math.random() * .12;
+      o.type = 'sawtooth'; o.frequency.setValueAtTime(f0 * .85, t0); o.frequency.linearRampToValueAtTime(f0 * 1.12, t0 + .35); o.frequency.linearRampToValueAtTime(f0 * .95, t0 + 1.4);
+      vib.frequency.value = 5 + Math.random() * 2; vg.gain.value = f0 * .025; vib.connect(vg); vg.connect(o.frequency);
+      o.connect(og); og.connect(bus); this.env(og, t0, .12, .11, 1.25); o.start(t0); o.stop(t0 + 1.6); vib.start(t0); vib.stop(t0 + 1.6);
     }
   }
   groan() {
