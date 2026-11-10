@@ -10,6 +10,7 @@ import { Board } from './leaderboard.js';
 import { CONFIG } from './config.js';
 import { store, deviceId, getProfile, setProfile, getSettings, setSettings, addHistory, AGE_LABEL } from './store.js';
 import { startTestPanel } from './testpanel.js';
+import { loadPeople } from './people.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -38,6 +39,9 @@ if (params.has('test')) startTestPanel(() => ({ voice, sensors, world, heard: la
 
 async function boot() {
   window.__fbBooted = true; // 게임 코드가 떴다 → index.html 의 로딩 감시를 끈다
+  // 실사풍 선수 모델(약 1MB)은 글꼴·경기장과 함께 미리 받기 시작한다. 그래픽 '낮음'이거나 ?simple 이면 단순 모델
+  const simplePeople = settings.quality === 'low' || params.has('simple');
+  const peopleP = simplePeople ? Promise.resolve(null) : loadPeople().catch(() => null);
   progress(15, '글꼴 준비 중…');
   try {
     await Promise.race([
@@ -51,6 +55,8 @@ async function boot() {
   try { world = new World($('#gl'), q); }
   catch (e) { bootMsg.textContent = '이 기기에서 3D 그래픽(WebGL)을 켤 수 없어요. 크롬이나 사파리 최신 버전으로 열어 주세요.'; console.error(e); window.__fbLog?.('ERR WebGL ' + e); return; }
   const photosReady = world.preload(['day']); // 하늘 사진·잔디 (타이틀과 첫 경기는 낮)
+  progress(60, '선수 모델 불러오는 중…');
+  await Promise.race([peopleP, new Promise(r => setTimeout(r, 12000))]); // 너무 느리면 단순 모델로 시작
   progress(80, '선수 입장 중…');
   audio = new AudioFX(); audio.setMode(settings.sound);
   voice = new Voice({ inApp }); sensors = new Sensors();

@@ -1,6 +1,7 @@
-// 절차적 축구 선수 모델 + 달리기 애니메이션
+// 축구 선수: 실사풍 사람 모델(people.js)이 준비되면 그것을, 아니면 절차적 단순 모델 + 달리기 애니메이션
 import * as THREE from 'three';
 import * as TX from './textures.js';
+import { Person, peopleReady } from './people.js';
 
 export const KITS = {
   home:   { shirt: '#ffc93c', trim: '#16264a', num: '#16264a', numStroke: '#fff1c4', shorts: '#16264a', socks: '#ffc93c', boots: '#141414', ring: '#ffc93c' },
@@ -63,6 +64,11 @@ export class Footballer {
     this.anim = null; // 특수 동작 (dive, tackle)
 
     const k = this.kit;
+    if (peopleReady()) {
+      this.person = new Person(this, k, number, opts);
+      this.addMarkers(g, S, kitName, number, opts);
+      return;
+    }
     const skin = SKINS[(opts.skin ?? Math.floor(Math.random() * SKINS.length)) % SKINS.length];
     const hair = HAIRS[Math.floor(Math.random() * HAIRS.length)];
     const M = (c, r = .72, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: 0, ...extra });
@@ -114,7 +120,11 @@ export class Footballer {
       add(kn, g.boot, this.mBoots, 0, -0.43, 0.05);
       return { th, kn, s };
     });
+    this.addMarkers(g, S, kitName, number, opts);
+  }
 
+  addMarkers(g, S, kitName, number, opts) {
+    const k = this.kit;
     // 발밑 링 + 블롭 그림자
     this.ringMat = new THREE.MeshBasicMaterial({ map: S.ring, color: k.ring, transparent: true, opacity: .62, depthWrite: false, toneMapped: false });
     this.ring = new THREE.Mesh(g.ring, this.ringMat); this.ring.position.y = 0.025; this.ring.renderOrder = 1;
@@ -133,12 +143,14 @@ export class Footballer {
   setNumber(n) {
     if (n === this.number && !this._blank) return;
     this.number = n; this._blank = false;
-    this.mShirt.map?.dispose(); this.mShirt.map = TX.jersey(this.kit, n); this.mShirt.needsUpdate = true;
+    if (this.person) { this.person.setNumber(n); this.person.setBlank(false); }
+    else { this.mShirt.map?.dispose(); this.mShirt.map = TX.jersey(this.kit, n); this.mShirt.needsUpdate = true; }
     this.badgeMat.map?.dispose(); this.badgeMat.map = TX.badge(n, this.kit.ring, this.badgeFg); this.badgeMat.needsUpdate = true;
   }
   setBlank(on) { // 등번호 지우기 (등번호 추적 훈련)
     if (on === !!this._blank) return;
     this._blank = on;
+    if (this.person) { this.person.setBlank(on); return; }
     const S = shared();
     if (on) {
       if (!S.blank[this.kitName]) S.blank[this.kitName] = TX.jersey(this.kit, null, { blank: true });
@@ -150,12 +162,14 @@ export class Footballer {
   setRing(on, color) { this.ring.visible = on; if (color) this.ringMat.color.set(color); }
   setVisible(on) { this.group.visible = on; }
   glow(amount) { // 순간 번쩍임
+    if (this.person) return this.person.glow(amount);
     const e = this.mShirt.emissive; e.set(this.kit.shirt).multiplyScalar(amount);
   }
   place(x, z, faceX, faceZ) {
     this.pos.set(x, 0, z); this.target.set(x, 0, z); this.vel.set(0, 0, 0);
     if (faceX != null) this.group.rotation.y = Math.atan2(faceX - x, faceZ - z);
     this.anim = null; this.group.rotation.z = 0; this.group.rotation.x = 0;
+    if (this.person) this.person.root.position.y = 0;
   }
   moveTo(x, z, speed) { this.target.set(x, 0, z); if (speed) this.maxSpeed = speed; }
 
@@ -187,6 +201,7 @@ export class Footballer {
   }
 
   pose(dt, sp) {
+    if (this.person) return this.person.pose(dt, sp);
     const amp = Math.min(1, sp / 6.5);
     const idle = 1 - Math.min(1, sp / 1.2);
     this.phase += dt * (2.2 + sp * 1.55);
@@ -209,6 +224,7 @@ export class Footballer {
 
   updateAnim(dt) {
     const A = this.anim; A.t += dt;
+    if (this.person) { if (this.person.special(A, dt)) this.anim = null; return; }
     if (A.type === 'dive') {
       const k = Math.min(1, A.t / 0.45), e = 1 - (1 - k) ** 3;
       this.pos.x = A.x0 + A.side * 2.4 * e;

@@ -6,3 +6,4 @@
 - 이 저장소의 코드·그림·디자인은 하프타임 부모 상담소의 저작물입니다. 허락 없이 복제·수정·배포할 수 없습니다.
 - 3D 엔진 three.js 는 MIT 라이선스입니다 (`vendor/three.LICENSE.txt`).
 - 하늘 사진은 [Poly Haven](https://polyhaven.com)(CC0), 잔디 사진은 [ambientCG](https://ambientcg.com)(CC0)의 무료 자료입니다 (`assets/env`, `assets/tex/grass_*`).
+- 선수 사람 모델·동작은 [Quaternius](https://quaternius.com)의 Universal Base Characters·Universal Animation Library(CC0)를 고쳐 쓴 것입니다 (`assets/people`).
