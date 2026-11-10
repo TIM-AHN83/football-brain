@@ -84,8 +84,58 @@ export function seatTexture(primary = '#16264a', accent = '#ffc93c') {
   return finish(c, { repeat: true });
 }
 
-// LED 광고판 — 가로로 흐르는 글자
-export function ledBoard(messages) {
+// 사진 잔디 위에 곱하는 큰 얼룩: 골문 앞·센터 마모, 잔디 색 차이 (흰색 = 그대로)
+export function pitchMacro(fieldW, fieldL, totalW, totalL) {
+  const px = 4;
+  const [c, g] = canvas(Math.round(totalW * px), Math.round(totalL * px));
+  const r = rand(17);
+  g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+  for (let i = 0; i < 700; i++) { // 잔디 색 얼룩 (밝게·어둡게·누렇게)
+    const x = r() * c.width, y = r() * c.height, s = 6 + r() * 46;
+    const k = r();
+    g.fillStyle = k < .4 ? `rgba(150,170,140,${.05 + r() * .07})` : k < .75 ? `rgba(255,255,235,${.04 + r() * .05})` : `rgba(215,200,140,${.05 + r() * .06})`;
+    g.beginPath(); g.ellipse(x, y, s, s * (.4 + r() * .6), r() * 3, 0, 7); g.fill();
+  }
+  const x0 = (totalW - fieldW) / 2 * px, z0 = (totalL - fieldL) / 2 * px;
+  const wear = (cx, cz, rx, rz, a) => { // 흙이 드러난 자국
+    for (let i = 0; i < 60; i++) {
+      const x = cx + (r() - .5) * rx * 2, y = cz + (r() - .5) * rz * 2, s = 2 + r() * 9;
+      g.fillStyle = `rgba(165,140,95,${a * (.3 + r() * .7)})`;
+      g.beginPath(); g.ellipse(x, y, s * 1.6, s, r() * 3, 0, 7); g.fill();
+    }
+  };
+  wear(c.width / 2, z0 + 2.5 * px, 4 * px, 2.2 * px, .55); wear(c.width / 2, z0 + fieldL * px - 2.5 * px, 4 * px, 2.2 * px, .55);
+  wear(c.width / 2, z0 + 11 * px, 1.2 * px, 1 * px, .5); wear(c.width / 2, z0 + fieldL * px - 11 * px, 1.2 * px, 1 * px, .5);
+  wear(c.width / 2, c.height / 2, 3 * px, 3 * px, .25);
+  void x0;
+  return finish(c, { aniso: 4 });
+}
+
+// 철망 펜스 (마름모 격자, 투명 바탕) — 1장 = 가로세로 0.5m
+export function chainLink() {
+  const [c, g] = canvas(64, 64);
+  g.clearRect(0, 0, 64, 64);
+  g.strokeStyle = 'rgba(255,255,255,1)'; g.lineWidth = 3.2;
+  g.beginPath(); g.moveTo(0, 32); g.lineTo(32, 0); g.lineTo(64, 32); g.lineTo(32, 64); g.closePath(); g.stroke();
+  g.beginPath(); g.moveTo(-32, 32); g.lineTo(0, 0); g.moveTo(96, 32); g.lineTo(64, 0); g.stroke();
+  return finish(c, { repeat: true, srgb: false, aniso: 8 });
+}
+
+// 조명탑 등 패널: 동그란 등 4×2개
+export function lampPanel() {
+  const [c, g] = canvas(256, 128);
+  g.fillStyle = '#1c1f24'; g.fillRect(0, 0, 256, 128);
+  for (let y = 0; y < 2; y++) for (let x = 0; x < 4; x++) {
+    const cx = 32 + x * 64, cy = 32 + y * 64;
+    const grd = g.createRadialGradient(cx, cy, 2, cx, cy, 27);
+    grd.addColorStop(0, '#ffffff'); grd.addColorStop(.7, '#e9eef4'); grd.addColorStop(.86, '#9aa3ad'); grd.addColorStop(1, '#2a2e35');
+    g.fillStyle = grd; g.beginPath(); g.arc(cx, cy, 27, 0, 7); g.fill();
+  }
+  return finish(c, { aniso: 4 });
+}
+
+// LED 광고판 — 가로로 흐르는 글자 (led:false 면 인쇄 현수막처럼 격자 없이)
+export function ledBoard(messages, { led = true } = {}) {
   const [c, g] = canvas(2048, 96);
   const segW = c.width / messages.length;
   messages.forEach((m, i) => {
@@ -95,16 +145,68 @@ export function ledBoard(messages) {
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(m.text, i * segW + segW / 2, 50);
   });
-  // LED 도트 격자
-  g.fillStyle = 'rgba(0,0,0,.22)';
-  for (let y = 0; y < 96; y += 4) g.fillRect(0, y, c.width, 1);
-  for (let x = 0; x < c.width; x += 4) g.fillRect(x, 0, 1, 96);
+  if (led) { // LED 도트 격자
+    g.fillStyle = 'rgba(0,0,0,.22)';
+    for (let y = 0; y < 96; y += 4) g.fillRect(0, y, c.width, 1);
+    for (let x = 0; x < c.width; x += 4) g.fillRect(x, 0, 1, 96);
+  }
   return finish(c, { repeat: true });
 }
 
-// 유니폼: CylinderGeometry UV 기준 u=0 앞, u=0.5 등
+// 얼굴 (머리 구의 UV: u=0.25 가 정면, 위쪽이 정수리). skin = 피부색
+export function face(skin) {
+  const [c, g] = canvas(256, 128);
+  g.fillStyle = skin; g.fillRect(0, 0, 256, 128);
+  const cx = 64, ey = 61;
+  const shade = (x, y, rx, ry, col) => {
+    const m = Math.max(rx, ry), grd = g.createRadialGradient(x, y, 0, x, y, m);
+    grd.addColorStop(0, col); grd.addColorStop(1, 'rgba(0,0,0,0)');
+    g.save(); g.translate(x, y); g.scale(rx / m, ry / m); g.translate(-x, -y); g.fillStyle = grd; g.fillRect(x - 2 * m, y - 2 * m, 4 * m, 4 * m); g.restore();
+  };
+  shade(cx, ey + 1, 30, 9, 'rgba(70,35,20,.13)');              // 눈두덩 그늘
+  shade(cx - 17, ey + 14, 9, 6, 'rgba(210,90,80,.12)'); shade(cx + 17, ey + 14, 9, 6, 'rgba(210,90,80,.12)'); // 볼
+  shade(cx, ey + 34, 26, 8, 'rgba(60,30,20,.12)');             // 턱 아래 그늘
+  for (const s of [-1, 1]) {
+    const x = cx + s * 11.5;
+    g.fillStyle = 'rgba(248,246,240,.95)'; g.beginPath(); g.ellipse(x, ey, 5.2, 2.5, 0, 0, 7); g.fill();
+    g.fillStyle = '#3b2719'; g.beginPath(); g.arc(x + s * .3, ey + .2, 2.3, 0, 7); g.fill();
+    g.fillStyle = '#0c0806'; g.beginPath(); g.arc(x + s * .3, ey + .2, 1.1, 0, 7); g.fill();
+    g.strokeStyle = 'rgba(28,16,10,.85)'; g.lineWidth = 1.4; g.beginPath(); g.ellipse(x, ey, 5.5, 2.8, 0, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+    g.strokeStyle = 'rgba(34,21,13,.92)'; g.lineWidth = 2.3; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(x - s * 5.5, ey - 6); g.quadraticCurveTo(x, ey - 8.6, x + s * 6.2, ey - 6.6); g.stroke();
+  }
+  shade(cx, ey + 11, 4, 7, 'rgba(90,45,30,.2)');               // 코 옆 그늘
+  g.strokeStyle = 'rgba(115,48,42,.9)'; g.lineWidth = 1.8;
+  g.beginPath(); g.moveTo(cx - 7, ey + 21); g.quadraticCurveTo(cx, ey + 23.2, cx + 7, ey + 21); g.stroke();
+  g.fillStyle = 'rgba(165,72,62,.35)'; g.beginPath(); g.ellipse(cx, ey + 23.2, 5.5, 1.6, 0, 0, 7); g.fill();
+  return finish(c, { aniso: 4 });
+}
+
+// 유니폼 천 질감(니트 결) 노멀맵 — 반복 타일
+export function fabricNormal() {
+  const N = 64, [c, g] = canvas(N, N), r = rand(31);
+  const h = new Float32Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const u = x / N * 8, v = y / N * 8;
+    const col = Math.abs((u % 1) - 0.5) * 2;
+    h[y * N + x] = (Math.sin((v + col * 0.5) * Math.PI * 2) * 0.5 + 0.5) * 0.8 + r() * 0.2;
+  }
+  const img = g.createImageData(N, N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const hx = h[y * N + (x + 1) % N] - h[y * N + (x - 1 + N) % N];
+    const hy = h[((y + 1) % N) * N + x] - h[((y - 1 + N) % N) * N + x];
+    let nx = -hx * 1.6, ny = hy * 1.6, nz = 1; const l = Math.hypot(nx, ny, nz); nx /= l; ny /= l; nz /= l;
+    const i = (y * N + x) * 4;
+    img.data[i] = (nx * .5 + .5) * 255; img.data[i + 1] = (ny * .5 + .5) * 255; img.data[i + 2] = (nz * .5 + .5) * 255; img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0);
+  return finish(c, { repeat: true, srgb: false, aniso: 4 });
+}
+
+// 유니폼: 몸통 회전체 UV 기준 u=0 앞, u=0.5 등 (512px, 가까이서도 등번호가 또렷하게)
 export function jersey(kit, number, { blank = false } = {}) {
-  const [c, g] = canvas(256, 256);
+  const [c, g] = canvas(512, 512);
+  g.scale(2, 2);
   g.fillStyle = kit.shirt; g.fillRect(0, 0, 256, 256);
   // 옆구리 라인과 미세 패턴
   g.fillStyle = kit.trim;

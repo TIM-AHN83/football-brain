@@ -3,7 +3,7 @@ import { World } from './world.js';
 import { Game, MODES } from './game.js';
 import { UI, shareCard } from './ui.js';
 import { AudioFX } from './audio.js';
-import { Voice } from './voice.js';
+import { Voice, micHelp, parseCall } from './voice.js';
 import { Sensors } from './sensors.js';
 import { Gestures } from './input.js';
 import { Board } from './leaderboard.js';
@@ -15,9 +15,16 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 const ui = new UI();
 const settings = getSettings();
+// 1.1.0: 예전엔 앱 안 브라우저에서 꺼진 음성 콜이 저장돼 계속 꺼져 있었다 → 한 번 다시 켠다
+if (!store.get('mig_voice1', false)) { settings.voice = true; setSettings(settings); store.set('mig_voice1', true); }
 const UA = navigator.userAgent;
 const isMobile = matchMedia('(pointer:coarse)').matches || /Android|iPhone|iPad/i.test(UA);
 const inApp = /Instagram|FBAN|FBAV|KAKAOTALK|NAVER\(inapp|Line\/|DaumApps|everytimeApp/i.test(UA);
+const isAndroid = /Android/i.test(UA), isSamsung = /SamsungBrowser/i.test(UA);
+const isIOS = /iPhone|iPad|iPod/i.test(UA) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const isChromeAndroid = isAndroid && /Chrome\//.test(UA) && !/SamsungBrowser|EdgA|OPR|Whale|NAVER|; wv\)/i.test(UA);
+const ENV = { samsung: isSamsung, ios: isIOS };
+const chromeIntent = () => `intent://${location.host}${location.pathname}${location.search}#Intent;scheme=https;package=com.android.chrome;end`;
 const secure = window.isSecureContext;
 const PREVIEW = !!window.FB_PREVIEW; // Claude 미리보기 링크: 마이크·센서·온라인 랭킹·공유가 막혀 있음
 const params = new URLSearchParams(location.search);
@@ -43,9 +50,10 @@ async function boot() {
   const q = settings.quality === 'auto' ? (isMobile ? 'mid' : 'high') : settings.quality;
   try { world = new World($('#gl'), q); }
   catch (e) { bootMsg.textContent = '이 기기에서 3D 그래픽(WebGL)을 켤 수 없어요. 크롬이나 사파리 최신 버전으로 열어 주세요.'; console.error(e); window.__fbLog?.('ERR WebGL ' + e); return; }
+  const photosReady = world.preload(['day']); // 하늘 사진·잔디 (타이틀과 첫 경기는 낮)
   progress(80, '선수 입장 중…');
   audio = new AudioFX(); audio.setMode(settings.sound);
-  voice = new Voice(); sensors = new Sensors();
+  voice = new Voice({ inApp }); sensors = new Sensors();
   game = new Game({ world, ui, audio, sensors, opts: { voice: settings.voice, motion: settings.motion, gyro: settings.gyro } });
   game.onEnd = onEnd;
   gestures = new Gestures($('#touch-layer'), {
@@ -57,20 +65,23 @@ async function boot() {
   gestures.dbl = settings.tap;
   voice.onText = (all, final, best) => {
     lastHeard = best;
-    if (state !== 'play') { if (state === 'mictest') $('#mic-out').textContent = best; return; }
+    if (state !== 'play') { if (state === 'mictest' && micOut && best) { micHeard = best; micOut.textContent = `들리는 중: "${best}"`; } return; }
     const hit = game.mode === 'mot' ? game.onVoiceMot(all) : game.onVoice(all);
     ui.voice(best, hit);
   };
   voice.onState = (s) => {
     if (state === 'play') ui.mic(s === 'blocked' ? null : s);
-    if (s === 'blocked') ui.toast('마이크가 꺼져 있어서 음성 콜 없이 진행해요');
+    if (s === 'blocked' && state === 'play') ui.toast(micHelp(voice.lastErr, ENV) + ' (이번 판은 음성 콜 없이 진행)', 6500);
   };
   window.FB = { world, game, voice, sensors, ui, audio }; // 테스트용
   window.addEventListener('resize', () => world.resize());
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pauseGame(); });
+  progress(90, '하늘·잔디 사진 불러오는 중…');
+  await Promise.race([photosReady, new Promise(r => setTimeout(r, 8000))]); // 느린 망이면 그림 하늘로 먼저 시작
   requestAnimationFrame(loop);
   progress(100, '킥오프 준비 완료');
   setTimeout(showTitle, 250);
+  setTimeout(() => world.loadEnv('dusk'), 1500); setTimeout(() => world.loadEnv('night'), 4000); // 해 질 녘·야간 하늘은 뒤에서 미리 받아 둔다
   if (!PREVIEW) Board.init();
   if (inApp && !PREVIEW) showInApp();
   $('#ver-line').textContent = `버전 ${CONFIG.version}`;
@@ -150,7 +161,8 @@ function openSetup(mode, level = 1) {
   $('#tg-motion').disabled = $('#tg-gyro').disabled = PREVIEW;
   const warns = [];
   if (PREVIEW) warns.push('미리보기 링크라서 마이크·센서가 꺼져 있어요. 탭(한 번·두 번·꾹)과 화면 끌기로 해 보세요. 정식 주소에서는 음성 콜과 발 센서가 모두 켜져요.');
-  else if (!voice.supported) warns.push(inApp ? '인스타·카톡 앱 안에서는 음성 인식이 안 돼요. 크롬이나 사파리로 열면 "7번 패스!" 콜 보너스를 받을 수 있어요.' : '이 브라우저는 음성 인식을 지원하지 않아요(크롬·사파리 권장). 음성 콜 없이 진행해요.');
+  else if (!voice.supported) warns.push(micHelp(inApp ? 'inapp' : 'unsupported', ENV) + ' 음성 콜 없이 진행해요.');
+  $('#mic-check').hidden = !voice.supported || PREVIEW;
   if (!secure && !PREVIEW) warns.push('보안 연결(https)이 아니라서 센서와 마이크가 막혀요. https 주소로 열어 주세요.');
   if (!isMobile) warns.push('컴퓨터에서는 ← → ↑ 키와 마우스 끌기로 할 수 있어요.');
   $('#setup-warn').hidden = !warns.length; $('#setup-warn').innerHTML = warns.join('<br>');
@@ -165,14 +177,20 @@ async function kickoff() {
   const btn = $('#btn-kickoff'); btn.disabled = true;
   try {
     audio.unlock();
-    if (!PREVIEW) { settings.voice = $('#tg-voice').checked; settings.motion = $('#tg-motion').checked; settings.gyro = $('#tg-gyro').checked; setSettings(settings); }
+    // 음성이 안 되는 브라우저(앱 안 등)에서 꺼진 스위치를 저장하면, 나중에 크롬으로 열어도 계속 꺼져 있게 된다 → 쓸 수 있을 때만 저장
+    if (!PREVIEW) { if (voice.supported) settings.voice = $('#tg-voice').checked; settings.motion = $('#tg-motion').checked; settings.gyro = $('#tg-gyro').checked; setSettings(settings); }
     else { settings.voice = settings.motion = settings.gyro = false; }
     if ($('#in-code').value) store.set('code', $('#in-code').value.trim().slice(0, 16));
     game.opts.voice = settings.voice && voice.supported; game.opts.motion = settings.motion; game.opts.gyro = settings.gyro;
-    if (isMobile && (settings.motion || settings.gyro) && secure) await sensors.request({ motion: settings.motion, orient: settings.gyro });
+    if (isMobile && (settings.motion || settings.gyro) && secure) await sensors.request({ motion: settings.motion, orient: settings.gyro }); // 아이폰: 버튼 누른 순간에만 물어볼 수 있어 먼저
+    voice.reset();
+    if (game.opts.voice) { // 마이크 허락을 먼저 받는다 (전체 화면 전환이 허락 창을 가리지 않게)
+      const p = await voice.ensurePermission();
+      if (p === 'denied' || p === 'nomic') { game.opts.voice = false; ui.toast(micHelp(p, ENV) + ' (이번 판은 음성 콜 없이 진행)', 6500); }
+    }
     if (game.opts.voice) { voice.start(); audio.setDuck(true); }
     try { wakeLock = await navigator.wakeLock?.request('screen'); } catch (e) { wakeLock = null; }
-    if (isMobile && document.documentElement.requestFullscreen && !document.fullscreenElement && /Android/i.test(UA)) document.documentElement.requestFullscreen().catch(() => {});
+    if (isMobile && document.documentElement.requestFullscreen && !document.fullscreenElement && isAndroid) document.documentElement.requestFullscreen().catch(() => {});
     setTimeout(() => sensors.calibrate(), 600);
     ui.close('scr-setup'); ui.go('none');
     game.endCinematic(); game.look.drag = 0; game.look.key = 0;
@@ -263,11 +281,33 @@ $('#btn-settings').addEventListener('click', () => ui.open('scr-settings'));
 seg('seg-quality', settings.quality, v => { settings.quality = v; setSettings(settings); ui.toast('다음에 게임을 열 때 적용돼요'); });
 seg('seg-sound', settings.sound, v => { settings.sound = v; setSettings(settings); audio.setMode(v); audio.unlock(); audio.ok(); });
 seg('seg-tap', settings.tap, v => { settings.tap = +v; setSettings(settings); gestures.dbl = +v; });
-$('#btn-mictest').addEventListener('click', () => {
-  if (!voice.supported) { $('#mic-out').textContent = inApp ? '앱 안 브라우저에서는 음성 인식이 안 돼요. 크롬/사파리로 열어 주세요.' : '이 브라우저는 음성 인식을 지원하지 않아요.'; return; }
-  state = 'mictest'; $('#mic-out').textContent = '듣는 중… "10번 패스!"'; voice.start();
-  setTimeout(() => { voice.stop(); if (state === 'mictest') state = 'title'; }, 6000);
-});
+// ---------- 마이크 확인 (시작 준비 화면·설정 화면 공통) ----------
+let micOut = null, micHeard = '', micTimer = null;
+async function micCheck(out, chromeBtn) {
+  chromeBtn.hidden = true; out.classList.remove('ok', 'bad');
+  if (!voice.supported) { out.textContent = micHelp(inApp ? 'inapp' : 'unsupported', ENV); out.classList.add('bad'); return; }
+  voice.stop(); voice.reset(); clearTimeout(micTimer);
+  out.textContent = '마이크를 써도 되는지 물어보면 "허용"을 눌러 주세요…';
+  const p = await voice.ensurePermission();
+  if (p === 'denied' || p === 'nomic') { out.textContent = micHelp(p, ENV); out.classList.add('bad'); return; }
+  micOut = out; micHeard = ''; state = 'mictest';
+  out.textContent = '듣는 중… "10번 패스!"라고 말해 보세요 🎙';
+  voice.start();
+  micTimer = setTimeout(() => {
+    voice.stop(); if (state === 'mictest') state = 'title';
+    if (micHeard) {
+      const c = parseCall(micHeard);
+      out.textContent = c.num ? `잘 들려요 ✅ "${micHeard}" → ${c.num}번${c.pass ? ' 패스' : ''}` : `들려요 ✅ "${micHeard}" — 번호를 또렷하게 말하면 콜 성공!`;
+      out.classList.add('ok');
+    } else {
+      out.textContent = micHelp(voice.lastErr || 'silent', ENV); out.classList.add('bad');
+      if (isAndroid && !isChromeAndroid) { chromeBtn.href = chromeIntent(); chromeBtn.hidden = false; }
+    }
+    window.__fbLog?.(`MIC ${micHeard ? 'OK ' + micHeard : 'FAIL ' + (voice.lastErr || 'silent')}`);
+  }, 6000);
+}
+$('#btn-miccheck').addEventListener('click', () => micCheck($('#miccheck-out'), $('#btn-openchrome')));
+$('#btn-mictest').addEventListener('click', () => micCheck($('#mic-out'), $('#btn-openchrome2')));
 
 // ---------- 인앱 브라우저 ----------
 function showInApp() {
@@ -305,11 +345,11 @@ async function demo(which) {
     if (which === 'setup') openSetup('challenge'); else if (which === 'profile') openProfile(); else { ui.open('scr-' + which); if (which === 'ranking') loadRanking(); }
   }
 }
-if (params.get('demo')) setTimeout(() => demo(params.get('demo')), 1200);
 
 // 개발용: ?debug 에서 v 키로 음성 입력 흉내
 if (params.has('debug')) window.addEventListener('keydown', (e) => {
   if (e.key === 'v' && state === 'play') { const t = prompt('들린 말 (예: 7번 패스)'); if (t) voice.onText(t, true, t); }
 });
 
-boot();
+const booted = boot();
+if (params.get('demo')) booted.then(() => setTimeout(() => demo(params.get('demo')), 700));

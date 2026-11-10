@@ -10,24 +10,30 @@ export const KITS = {
 const SKINS = ['#f1c9a5', '#e3b08a', '#c98d66', '#9a6440', '#f5d6b8', '#6e452c'];
 const HAIRS = ['#1b1410', '#2b1d14', '#4a3020', '#0d0d0d', '#6b4a2a', '#2a2622'];
 
-let G = null; // 공유 지오메트리
+let G = null; // 공유 지오메트리 (사람 몸 곡선: 가슴·허리·종아리는 회전체로 만든다)
 function geos() {
   if (G) return G;
-  const cap = (r, l, dy) => new THREE.CapsuleGeometry(r, l, 4, 12).translate(0, dy, 0);
+  const cap = (r, l, dy) => new THREE.CapsuleGeometry(r, l, 4, 14).translate(0, dy, 0);
+  const lathe = (pts, seg = 26) => new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, y)), seg);
   G = {
-    torso: new THREE.CylinderGeometry(0.17, 0.145, 0.5, 24, 1),
-    shoulder: new THREE.SphereGeometry(0.078, 14, 10),
-    upperArm: cap(0.05, 0.19, -0.14),
-    forearm: cap(0.041, 0.17, -0.125),
-    hand: new THREE.SphereGeometry(0.044, 10, 8),
-    neck: new THREE.CylinderGeometry(0.05, 0.058, 0.09, 12),
-    head: new THREE.SphereGeometry(0.105, 22, 16),
-    hair: new THREE.SphereGeometry(0.112, 22, 12, 0, Math.PI * 2, 0, Math.PI * 0.56),
-    pelvis: new THREE.CylinderGeometry(0.152, 0.168, 0.2, 18),
-    shortLeg: new THREE.CylinderGeometry(0.088, 0.082, 0.19, 14).translate(0, -0.085, 0),
-    thigh: cap(0.067, 0.3, -0.21),
-    shin: cap(0.053, 0.31, -0.205),
-    boot: new THREE.CapsuleGeometry(0.046, 0.15, 4, 10).rotateX(Math.PI / 2).scale(1, 0.72, 1),
+    // 몸통(유니폼): 허리 → 가슴 → 어깨 → 목둘레
+    torso: lathe([[0.150, 0.0], [0.153, 0.07], [0.162, 0.17], [0.176, 0.28], [0.184, 0.38], [0.18, 0.445], [0.162, 0.495], [0.125, 0.53], [0.072, 0.552], [0.0, 0.556]]),
+    shoulder: new THREE.SphereGeometry(0.07, 16, 12),
+    sleeve: new THREE.CylinderGeometry(0.066, 0.06, 0.17, 16, 1, true).translate(0, -0.075, 0),
+    upperArm: cap(0.049, 0.19, -0.15),
+    forearm: cap(0.043, 0.17, -0.125),
+    hand: new THREE.SphereGeometry(0.046, 12, 10).scale(0.8, 1.15, 0.6),
+    neck: new THREE.CylinderGeometry(0.052, 0.06, 0.1, 14),
+    head: new THREE.SphereGeometry(0.105, 28, 20),
+    nose: new THREE.SphereGeometry(0.018, 10, 8).scale(0.75, 1.25, 1),
+    ear: new THREE.SphereGeometry(0.026, 10, 8).scale(0.45, 1, 0.75),
+    hair: new THREE.SphereGeometry(0.113, 26, 14, 0, Math.PI * 2, 0, Math.PI * 0.56),
+    pelvis: lathe([[0.158, -0.06], [0.168, 0.0], [0.172, 0.11], [0.16, 0.2]], 22),
+    shortLeg: new THREE.CylinderGeometry(0.098, 0.09, 0.2, 16).translate(0, -0.09, 0),
+    thigh: cap(0.074, 0.28, -0.21),
+    // 종아리(양말): 무릎 아래 → 종아리 볼록 → 발목
+    shin: lathe([[0.047, -0.42], [0.052, -0.34], [0.064, -0.22], [0.066, -0.14], [0.06, -0.05], [0.057, 0.02]], 18),
+    boot: new THREE.CapsuleGeometry(0.048, 0.16, 4, 12).rotateX(Math.PI / 2).scale(1, 0.72, 1),
     ring: new THREE.PlaneGeometry(1.5, 1.5).rotateX(-Math.PI / 2),
     blob: new THREE.PlaneGeometry(1.1, 1.1).rotateX(-Math.PI / 2),
   };
@@ -36,7 +42,7 @@ function geos() {
 let SHARED = null;
 function shared() {
   if (SHARED) return SHARED;
-  SHARED = { ring: TX.ringTexture(), blob: TX.blobShadow(), blank: {} };
+  SHARED = { ring: TX.ringTexture(), blob: TX.blobShadow(), blank: {}, fabric: TX.fabricNormal(), faces: {} };
   return SHARED;
 }
 
@@ -60,9 +66,13 @@ export class Footballer {
     const skin = SKINS[(opts.skin ?? Math.floor(Math.random() * SKINS.length)) % SKINS.length];
     const hair = HAIRS[Math.floor(Math.random() * HAIRS.length)];
     const M = (c, r = .72, extra = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: r, metalness: 0, ...extra });
-    this.mShirt = M('#ffffff', .78, { map: TX.jersey(k, number) });
-    this.mSkin = M(skin, .6); this.mHair = M(hair, .9);
-    this.mShorts = M(k.shorts, .7); this.mSocks = M(k.socks, .75); this.mBoots = M(k.boots, .35);
+    const cloth = (rep) => { const t = S.fabric.clone(); t.needsUpdate = true; t.repeat.set(rep[0], rep[1]); return { normalMap: t, normalScale: new THREE.Vector2(.45, .45) }; };
+    const skinIdx = (opts.skin ?? SKINS.indexOf(skin)) % SKINS.length;
+    if (!S.faces[skinIdx]) S.faces[skinIdx] = TX.face(skin);
+    this.mShirt = M('#ffffff', .8, { map: TX.jersey(k, number), ...cloth([28, 18]) });
+    this.mSleeve = M(k.shirt, .8, cloth([10, 4]));
+    this.mSkin = M(skin, .55); this.mFace = M('#ffffff', .55, { map: S.faces[skinIdx] }); this.mHair = M(hair, .92);
+    this.mShorts = M(k.shorts, .72, cloth([18, 8])); this.mSocks = M(k.socks, .8, cloth([8, 14])); this.mBoots = M(k.boots, .32);
     this.meshes = [];
     const add = (parent, geo, mat, x = 0, y = 0, z = 0) => {
       const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z);
@@ -74,17 +84,21 @@ export class Footballer {
     add(this.hips, g.pelvis, this.mShorts, 0, 0.02, 0).scale.set(1.12, 1, 0.82);
     // 상체
     this.torso = new THREE.Group(); this.torso.position.y = 0.1; this.hips.add(this.torso);
-    const t = add(this.torso, g.torso, this.mShirt, 0, 0.25, 0); t.scale.set(1.14, 1, 0.78);
-    add(this.torso, g.neck, this.mSkin, 0, 0.54, 0);
-    this.head = new THREE.Group(); this.head.position.y = 0.66; this.torso.add(this.head);
-    add(this.head, g.head, this.mSkin).scale.set(0.95, 1.1, 1);
-    const hr = add(this.head, g.hair, this.mHair, 0, 0.02, -0.006); hr.rotation.x = -0.32; hr.scale.set(0.98, 1.08, 1.04);
-    // 팔
+    const t = add(this.torso, g.torso, this.mShirt, 0, 0, 0); t.scale.set(1.13, 1, 0.74);
+    add(this.torso, g.neck, this.mSkin, 0, 0.56, 0);
+    this.head = new THREE.Group(); this.head.position.y = 0.68; this.torso.add(this.head);
+    add(this.head, g.head, this.mFace).scale.set(0.92, 1.08, 0.98);
+    add(this.head, g.nose, this.mSkin, 0, -0.012, 0.1);
+    for (const s of [-1, 1]) add(this.head, g.ear, this.mSkin, 0.093 * s, 0.002, -0.004);
+    const hr = add(this.head, g.hair, this.mHair, 0, 0.024, -0.01); hr.rotation.x = -0.6; hr.scale.set(0.95, 1.06, 1.03);
+    // 팔 (반팔 소매 + 맨팔)
     this.arms = [-1, 1].map(s => {
-      const sh = new THREE.Group(); sh.position.set(0.2 * s, 0.47, 0); this.torso.add(sh);
-      add(sh, g.shoulder, this.mShirt).scale.set(1, .9, .9);
-      add(sh, g.upperArm, this.mShirt).rotation.z = 0.12 * s;
-      const el = new THREE.Group(); el.position.set(0.035 * s, -0.29, 0); sh.add(el);
+      const sh = new THREE.Group(); sh.position.set(0.19 * s, 0.455, 0); this.torso.add(sh);
+      add(sh, g.shoulder, this.mSleeve).scale.set(1, .85, .9);
+      const up = new THREE.Group(); up.rotation.z = 0.1 * s; sh.add(up);
+      add(up, g.sleeve, this.mSleeve);
+      add(up, g.upperArm, this.mSkin);
+      const el = new THREE.Group(); el.position.set(0.03 * s, -0.29, 0); sh.add(el);
       add(el, g.forearm, this.mSkin);
       add(el, g.hand, this.mSkin, 0, -0.27, 0);
       sh.rotation.z = 0.1 * s;
@@ -102,7 +116,7 @@ export class Footballer {
     });
 
     // 발밑 링 + 블롭 그림자
-    this.ringMat = new THREE.MeshBasicMaterial({ map: S.ring, color: k.ring, transparent: true, opacity: .8, depthWrite: false, toneMapped: false });
+    this.ringMat = new THREE.MeshBasicMaterial({ map: S.ring, color: k.ring, transparent: true, opacity: .62, depthWrite: false, toneMapped: false });
     this.ring = new THREE.Mesh(g.ring, this.ringMat); this.ring.position.y = 0.025; this.ring.renderOrder = 1;
     this.group.add(this.ring); this.ring.visible = opts.ring !== false;
     this.blob = new THREE.Mesh(g.blob, new THREE.MeshBasicMaterial({ map: S.blob, transparent: true, depthWrite: false }));

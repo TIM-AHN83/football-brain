@@ -141,6 +141,9 @@
     <div class="toggles">
       <label class="tog"><input type="checkbox" id="tg-voice" checked><span class="tog-ui"></span>
         <span class="tog-text"><b>음성 콜</b><small>"7번 패스!" 외치면 보너스 · 마이크 사용</small></span></label>
+      <div class="mic-check" id="mic-check"><button type="button" id="btn-miccheck" class="btn small">🎙 마이크 확인</button>
+        <span id="miccheck-out" class="mic-check-out">처음이라면 눌러서 "10번 패스!"라고 말해 보세요</span>
+        <a id="btn-openchrome" class="btn small" hidden>크롬으로 열기</a></div>
       <label class="tog"><input type="checkbox" id="tg-motion" checked><span class="tog-ui"></span>
         <span class="tog-text"><b>발 움직임 센서</b><small>발을 움직여야 앞으로 달려요</small></span></label>
       <label class="tog"><input type="checkbox" id="tg-gyro" checked><span class="tog-ui"></span>
@@ -211,7 +214,7 @@
       <div class="seg" id="seg-tap"><button type="button" data-v="220">빠름</button><button type="button" data-v="280">보통</button><button type="button" data-v="360">느림</button></div></div>
     <div class="field"><span>마이크 테스트</span>
       <button id="btn-mictest" class="btn small">말해 보기 ("10번 패스")</button>
-      <p id="mic-out" class="mic-out">—</p></div>
+      <p id="mic-out" class="mic-out">—</p><a id="btn-openchrome2" class="btn small" hidden>크롬으로 열기</a></div>
   </div>
 </section>
 
@@ -226,6 +229,8 @@
       <p>랭킹에는 닉네임·나이대·팀 이름(선택)과 점수만 저장돼요. 음성은 휴대폰 브라우저의 음성 인식 기능으로 처리되고 게임 서버에는 저장하지 않아요. 만 14세 미만 어린이는 보호자와 함께 이용해 주세요.</p>
       <h3>소리 출처</h3>
       <p>관중 함성·휘슬·킥·효과음은 모두 게임 안에서 직접 합성한 소리예요(저작권 문제 없음).</p>
+      <h3>그래픽 출처</h3>
+      <p>하늘·먼 풍경·햇빛은 <a href="https://polyhaven.com" target="_blank" rel="noopener">Poly Haven</a>의 무료 사진(CC0: Alps Field, Lilienstein, Moonlit Golf), 잔디는 <a href="https://ambientcg.com" target="_blank" rel="noopener">ambientCG</a>의 무료 텍스처(CC0: Grass005, Grass004)를 썼어요. 3D 엔진은 three.js(MIT). 축구공·선수·경기장은 직접 만들었어요.</p>
       <h3>만든 곳</h3>
       <p>하프타임 부모 상담소 · <a href="https://www.instagram.com/halftime.parenttalk/" target="_blank" rel="noopener">@halftime.parenttalk</a></p>
       <p class="fine" id="ver-line"></p>

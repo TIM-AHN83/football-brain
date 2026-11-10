@@ -597,7 +597,7 @@ export class Game {
   cinematic(dt, t) {
     const w = this.world;
     if (!this._cine) {
-      this._cine = true; w.setTimeOfDay('dusk');
+      this._cine = true; w.setTimeOfDay('day');
       this.mates.forEach((m, i) => { m.setVisible(i < 3); m.setBlank(false); m.showBadge(false); m.setRing(false); m.rel = null; m.place(-6 + i * 6, -2 - i * 3); });
       this.defs.forEach((d, i) => { d.setVisible(i < 2); d.setRing(false); d.place(-3 + i * 7, -10); });
       this.keeper.setVisible(true); this.keeper.place(0, -PITCH.HL + .7, 0, 0);
