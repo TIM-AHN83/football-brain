@@ -154,6 +154,25 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .rank-list .n small{font-size:11px;color:var(--mist)}
 .rank-list .s{font:800 22px/1 var(--num);text-align:right}
 .rank-list .s small{display:block;font:600 11px var(--body);color:var(--mist)}
+/* ---------- 클럽 대항전 ---------- */
+.club-card .cc-ico{background:var(--navy-2);font-size:24px}
+.club-body{display:grid;gap:12px}
+.club-head{display:grid;gap:6px;padding:14px;background:linear-gradient(135deg,rgba(255,201,60,.18),rgba(22,38,74,.7));border:1px solid rgba(255,201,60,.35)}
+.club-head>small{color:var(--mist);font-size:12px}
+.club-head>b{font:400 28px/1.1 var(--display);word-break:keep-all}
+.club-week{display:flex;flex-wrap:wrap;gap:4px 16px;align-items:baseline;font-size:13px;color:var(--mist)}
+.club-week em{font:800 26px/1 var(--num);font-style:normal;color:var(--sun);margin:0 2px}
+.club-gap{margin:0;font-size:13px;font-weight:700}
+.club-trophy{display:grid;gap:2px;font-size:13px;padding-top:8px;border-top:1px solid var(--line)}
+.club-trophy small{color:var(--mist);font-size:11px;line-height:1.5}
+.club-invite{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(244,246,251,.05);border:1px dashed var(--line)}
+.club-invite small{display:block;color:var(--mist);font-size:11px}
+.club-invite b{font:800 24px/1.1 var(--num);letter-spacing:.12em}
+.club-invite.pending{border-style:solid;border-color:var(--sun);background:rgba(255,201,60,.1)}
+.club-invite.pending b{font:700 16px/1.3 var(--body);letter-spacing:0}
+.club-h{margin:4px 0 0;font-size:14px}
+.club-h small{font-weight:400;color:var(--mist);font-size:12px;margin-left:6px}
+#club-code{text-transform:uppercase;letter-spacing:.15em}
 .rank-empty{padding:24px 8px;text-align:center;color:var(--mist);font-size:13px;line-height:1.6}
 
 .mic-out{margin:0;min-height:22px;font-size:14px;color:var(--sun)}

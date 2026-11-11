@@ -92,6 +92,11 @@
       <span class="pc-text"><b id="pc-nick">선수 등록</b><small id="pc-sub">닉네임·나이대를 정해 주세요</small></span>
       <span class="pc-edit">수정</span>
     </button>
+    <button id="btn-club" class="player-card club-card">
+      <span class="pc-num cc-ico" aria-hidden="true">🏆</span>
+      <span class="pc-text"><b id="cc-name">클럽 대항전</b><small id="cc-sub">팀을 만들어 함께 점수를 모아요 · 매주 트로피</small></span>
+      <span class="pc-edit">열기</span>
+    </button>
     <button id="btn-challenge" class="btn btn-primary"><span>챌린지 시작</span><small>목숨 3개 · 랭킹 도전</small></button>
     <div class="btn-row">
       <button id="btn-drills" class="btn">훈련장</button>
@@ -196,10 +201,18 @@
 <section id="scr-ranking" class="screen sheet-screen">
   <div class="sheet tall">
     <header class="sheet-head"><h2>랭킹</h2><button type="button" class="x-btn" data-close aria-label="닫기">✕</button></header>
-    <div class="seg" id="seg-period"><button type="button" data-v="week">이번 주</button><button type="button" data-v="all">전체</button><button type="button" data-v="me">내 기록</button></div>
+    <div class="seg" id="seg-period"><button type="button" data-v="week">이번 주</button><button type="button" data-v="all">전체</button><button type="button" data-v="me">내 기록</button><button type="button" data-v="club">클럽</button></div>
     <div class="seg small" id="seg-rage"><button type="button" data-v="all">전체</button><button type="button" data-v="u8">U-8</button><button type="button" data-v="u10">U-10</button><button type="button" data-v="u12">U-12</button><button type="button" data-v="u15">U-15</button><button type="button" data-v="open">일반</button></div>
     <p id="rank-note" class="fine"></p>
     <ol id="rank-list" class="rank-list"></ol>
+  </div>
+</section>
+
+<!-- 클럽 대항전 -->
+<section id="scr-club" class="screen sheet-screen">
+  <div class="sheet tall">
+    <header class="sheet-head"><h2>클럽 대항전</h2><button type="button" class="x-btn" data-close aria-label="닫기">✕</button></header>
+    <div id="club-body" class="club-body"></div>
   </div>
 </section>
 

@@ -1,4 +1,5 @@
-// 온라인 랭킹 (Supabase 함수 fb_config / fb_submit / fb_top). 연결이 안 되면 기기 안 기록만 보여준다.
+// 온라인 랭킹 (Supabase 함수 fb_config / fb_submit / fb_top)과 클럽 대항전 (fb_club_*, supabase/fb_clubs.sql).
+// 연결이 안 되면 기기 안 기록만 보여준다.
 import { CONFIG } from './config.js';
 
 async function rpc(fn, body, ms = 7000) {
@@ -28,6 +29,19 @@ export const Board = {
   },
   async top(period = 'week', age = 'all') {
     try { const rows = await rpc('fb_top', { p_period: period, p_age: age, p_limit: 50 }); this.state = 'online'; return { ok: true, rows }; }
+    catch (e) { return { ok: false, error: why(e) }; }
+  },
+  // ---------- 클럽 대항전 ----------
+  async call(fn, body) {
+    try { return (await rpc(fn, body)) || { ok: false, error: 'network' }; }
+    catch (e) { return { ok: false, error: why(e) }; }
+  },
+  clubCreate(name, device, nick) { return this.call('fb_club_create', { p: { name, device, nick } }); },
+  clubJoin(code, device, nick) { return this.call('fb_club_join', { p: { code, device, nick } }); },
+  clubLeave(device) { return this.call('fb_club_leave', { p: { device } }); },
+  clubInfo(code, device) { return this.call('fb_club_info', { p_code: code, p_device: device }); },
+  async clubTop(period = 'week') {
+    try { const rows = await rpc('fb_club_top', { p_period: period, p_limit: 50 }); return { ok: true, rows }; }
     catch (e) { return { ok: false, error: why(e) }; }
   },
 };
