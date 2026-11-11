@@ -66,6 +66,11 @@ async function boot() {
   voice = new Voice({ inApp }); sensors = new Sensors();
   game = new Game({ world, ui, audio, sensors, opts: { voice: settings.voice, motion: settings.motion, gyro: settings.gyro } });
   game.onEnd = onEnd;
+  game.onTutorialDone = (finished) => { // 따라 하기가 끝나면(또는 건너뛰면) 챌린지로 안내
+    endSession(); store.set('tutDone', true); showTitle();
+    $('#tutdone-title').textContent = finished ? '준비 끝! 🎉' : '언제든 다시 따라 할 수 있어요';
+    ui.open('scr-tutdone');
+  };
   gestures = new Gestures($('#touch-layer'), {
     zones: () => game.zones(),
     onTap: (zone, t, n) => { if (!game.swipeMode()) ui.zoneFlash(zone, n); game.onInput(zone, t); },
@@ -96,7 +101,7 @@ async function boot() {
   setTimeout(() => world.loadEnv('dusk'), 1500); setTimeout(() => world.loadEnv('night'), 4000); // 해 질 녘·야간 하늘은 뒤에서 미리 받아 둔다
   if (!PREVIEW) Board.init();
   if (inApp && !PREVIEW) showInApp();
-  $('#ver-line').textContent = `버전 ${CONFIG.version}`;
+  $('#ver-line').textContent = `버전 ${CONFIG.version} · 시범 운영(베타)`;
 }
 
 // ---------- 매 프레임 ----------
@@ -120,6 +125,8 @@ function loop(now) {
 // ---------- 타이틀 ----------
 function showTitle() {
   state = 'title'; ui.go('scr-title'); renderPlayerCard(); club.refreshCard();
+  const first = !store.get('tutDone', false) && !store.get('history', []).length; // 처음 온 사람: 30초 따라 하기를 먼저
+  $('#btn-tutorial').hidden = !first; $('#btn-challenge').classList.toggle('btn-primary', !first);
   if (store.get('pendingClub', '') && !inviteShown && !PREVIEW) { inviteShown = true; setTimeout(() => club.open(), 600); } // 초대 링크로 들어왔으면 클럽 화면을 연다
   const best = store.get('best', null);
   $('#best-line').textContent = best ? `내 최고 ${best.score.toLocaleString('ko-KR')}점 · LV ${best.level} · 두뇌 지수 ${best.bi}` : '아직 기록이 없어요 · 첫 챌린지에 도전!';
@@ -185,6 +192,23 @@ function openSetup(mode, level = 1) {
   ui.open('scr-setup');
 }
 $('#btn-challenge').addEventListener('click', () => { if (!getProfile()) return openProfile('challenge'); openSetup('challenge'); });
+
+// ---------- 30초 따라 하기 (등록·권한 없이 바로) ----------
+function startTutorial() {
+  audio.unlock(); ['scr-howto', 'scr-tutdone'].forEach(id => ui.close(id));
+  game.opts.voice = false; game.opts.motion = false; game.opts.gyro = false;
+  ui.go('none'); game.endCinematic(); game.look.drag = 0; game.look.key = 0;
+  lastMode = 'tutorial'; game.start('tutorial'); ui.mic(null);
+  gestures.enabled = true; gestures.reset(); state = 'play';
+}
+$('#btn-tutorial').addEventListener('click', startTutorial);
+$('#btn-tut-again').addEventListener('click', startTutorial);
+$('#btn-tut-again2').addEventListener('click', startTutorial);
+$('#btn-tut-skip').addEventListener('click', () => { if (state === 'play') game.tutDone(false); });
+$('#btn-tut-home').addEventListener('click', () => ui.close('scr-tutdone'));
+$('#btn-tut-challenge').addEventListener('click', () => { ui.close('scr-tutdone'); if (!getProfile()) return openProfile('challenge'); openSetup('challenge'); });
+// 의견 보내기 → 인스타 DM
+$$('.fb-link').forEach(a => { a.href = `https://ig.me/m/${CONFIG.instagram}`; });
 $('#btn-kickoff').addEventListener('click', kickoff);
 
 async function kickoff() {
@@ -395,6 +419,7 @@ async function demo(which) {
     onEnd({ mode: 'challenge', title: '챌린지', ranked: true, score: 18420, level: 6, accuracy: 82, avgRt: 612, decisions: 28, correct: 23, calls: 9, callChances: 14,
       goals: 5, shots: 6, scans: 21, scanPerMin: 7.4, minFlash: 470, whistle: [2, 3], both: [3, 4], scanRound: [4, 5], unseen: 0, mot: [0, 0], steps: 380, stepsPerMin: 134,
       duration: 170, axes: { judge: .82, speed: .81, vision: .71, call: .64, scan: .41, brake: .67 }, brainIndex: 74, voiceOn: true, feetOn: true });
+  } else if (which === 'tutorial') { startTutorial();
   } else if (which === 'play' || which === 'mot' || which === 'scan' || which === 'shoot') {
     if (!getProfile()) setProfile({ nick: '미리보기', age: 'u10', team: '', num: 7 });
     ui.go('none'); game.endCinematic(); game.opts.voice = false;

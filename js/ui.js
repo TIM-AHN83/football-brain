@@ -19,7 +19,7 @@ export class UI {
     this.el = {
       hud: $('#hud'), score: $('#hud-score'), level: $('#hud-level'), combo: $('#hud-combo'), lives: $('#hud-lives'), attack: $('#hud-attack'),
       callout: $('#hud-callout'), center: $('#hud-center'), pop: $('#hud-pop'), voice: $('#hud-voice'), timer: $('#hud-timer'), timerBar: $('#hud-timer i'),
-      hint: $('#hud-hint'), zone: $('#fx-zone'), blind: $('#fx-blind'), map: $('#scan-map'), feet: $('#m-feet'), mic: $('#m-mic'), mot: $('#mot-choices'), edgeL: $('#fx-edge-l'), edgeR: $('#fx-edge-r'), flash: $('#fx-flash'), toast: $('#toast'),
+      hint: $('#hud-hint'), zone: $('#fx-zone'), blind: $('#fx-blind'), map: $('#scan-map'), tut: $('#tut-card'), tutSwipe: $('#tut-swipe'), feet: $('#m-feet'), mic: $('#m-mic'), mot: $('#mot-choices'), edgeL: $('#fx-edge-l'), edgeR: $('#fx-edge-r'), flash: $('#fx-flash'), toast: $('#toast'),
     };
     this._feet = -1;
   }
@@ -88,6 +88,23 @@ export class UI {
     f.style.left = a + '%'; f.style.width = (b - a) + '%';
     f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
   }
+  // 30초 따라 하기: 단계 안내 카드 (null 이면 숨김)
+  tut(step) {
+    const c = this.el.tut; if (!c) return;
+    this.el.hud.classList.toggle('tut', step != null);
+    if (step == null) { c.hidden = true; this.el.tutSwipe.hidden = true; return; }
+    const S = [
+      ['패스', '빨간 수비수가 막은 쪽의 <em>반대쪽</em>을 눌러요'],
+      ['번쩍 패스', '이번엔 수비수가 <em>잠깐만</em> 보여요. 잘 보고 반대쪽!'],
+      ['슛', '공을 골대 <em>구석</em> 쪽으로 손가락으로 쓸어 올려요'],
+      ['골키퍼 속이기', '골키퍼가 한쪽으로 <em>기울면</em> 반대 구석으로 차요'],
+    ][step];
+    c.hidden = false;
+    $('#tut-prog').textContent = `${step + 1} / 4`;
+    $('#tut-title').textContent = S[0]; $('#tut-text').innerHTML = S[1];
+    this.el.tutSwipe.hidden = step < 2;
+  }
+  tutPulse(zone) { this.el.hint.querySelector(`[data-z="${zone}"]`)?.classList.add('pulse'); }
   // 슛: 쓸어 올린 자국
   swipeTrail(sw) {
     if (sw.x0 == null) return;

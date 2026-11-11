@@ -82,7 +82,7 @@
   <div class="title-main">
     <h1 class="logo">
       <span class="logo-en">FOOTBALL<b>BRAIN</b></span>
-      <span class="logo-ko">축구 두뇌 훈련</span>
+      <span class="logo-ko">축구 두뇌 훈련 <em class="beta">BETA</em></span>
     </h1>
     <p class="tagline">보고 <i>·</i> 외치고 <i>·</i> 패스한다</p>
   </div>
@@ -97,6 +97,7 @@
       <span class="pc-text"><b id="cc-name">클럽 대항전</b><small id="cc-sub">팀을 만들어 함께 점수를 모아요 · 매주 트로피</small></span>
       <span class="pc-edit">열기</span>
     </button>
+    <button id="btn-tutorial" class="btn btn-primary" hidden><span>▶ 30초 따라 하기</span><small>처음이라면 여기부터 · 등록 없이 바로</small></button>
     <button id="btn-challenge" class="btn btn-primary"><span>챌린지 시작</span><small>목숨 3개 · 랭킹 도전</small></button>
     <div class="btn-row">
       <button id="btn-drills" class="btn">훈련장</button>
@@ -105,7 +106,7 @@
     </div>
     <div class="title-foot">
       <span id="best-line">내 최고 기록 —</span>
-      <button id="btn-info" class="link-btn">정보·출처</button>
+      <span class="foot-links"><a class="link-btn fb-link" target="_blank" rel="noopener">의견 보내기</a> · <button id="btn-info" class="link-btn">정보·출처</button></span>
     </div>
   </div>
 </section>
@@ -122,10 +123,12 @@
         <button type="button" data-v="u12">U-12</button><button type="button" data-v="u15">U-15</button>
         <button type="button" data-v="open">일반</button>
       </div></div>
-    <label class="field"><span>팀 이름 <small>(선택)</small></span>
-      <input id="in-team" name="team" maxlength="16" placeholder="예: 하프타임FC"></label>
-    <label class="field"><span>좋아하는 등번호</span>
-      <input id="in-num" name="num" type="number" min="1" max="99" value="7"></label>
+    <details class="more-fields"><summary>팀 이름 · 좋아하는 등번호 <small>(선택)</small></summary>
+      <label class="field"><span>팀 이름 <small>(클럽에 들어가면 클럽 이름으로 바뀌어요)</small></span>
+        <input id="in-team" name="team" maxlength="16" placeholder="예: 하프타임FC"></label>
+      <label class="field"><span>좋아하는 등번호</span>
+        <input id="in-num" name="num" type="number" min="1" max="99" value="7"></label>
+    </details>
     <p class="fine">이름·전화번호 같은 개인정보는 받지 않아요. 실명 대신 별명을 써 주세요.</p>
     <button class="btn btn-primary" type="submit">저장</button>
   </form>
@@ -177,6 +180,7 @@
       <li><b>휘슬</b><span>휘슬이 울리면 아무것도 누르지 말고 멈춤! (레벨 5부터)</span></li>
       <li><b>1:1 슛으로 마무리</b><span>골대 앞에서 공을 <u>골대 쪽으로 쓸어 올려</u> 차요. 쓸어 올린 방향으로 날아가고, 빠르게 쓸수록 세고 높게(너무 세면 크로스바 위로). 골키퍼는 가운데에서 버티다 가끔 한쪽으로 <u>무게를 실어요</u> — 그 순간 반대 구석으로! 골을 넣으면 레벨 업.</span></li>
     </ol>
+    <button type="button" id="btn-tut-again2" class="btn">▶ 30초 따라 하기 다시</button>
     <p class="fine">컴퓨터: ← 왼쪽 · → 오른쪽 · ↑ 가운데(돌파) · 마우스 끌기로 둘러보기 · 슛은 마우스로 위로 끌거나 ← ↑ → 키</p>
   </div>
 </section>
@@ -207,6 +211,16 @@
     <div class="seg small" id="seg-rage"><button type="button" data-v="all">전체</button><button type="button" data-v="u8">U-8</button><button type="button" data-v="u10">U-10</button><button type="button" data-v="u12">U-12</button><button type="button" data-v="u15">U-15</button><button type="button" data-v="open">일반</button></div>
     <p id="rank-note" class="fine"></p>
     <ol id="rank-list" class="rank-list"></ol>
+  </div>
+</section>
+
+<!-- 따라 하기 끝 -->
+<section id="scr-tutdone" class="screen sheet-screen">
+  <div class="sheet">
+    <header class="sheet-head"><h2 id="tutdone-title">준비 끝! 🎉</h2><button type="button" class="x-btn" data-close aria-label="닫기">✕</button></header>
+    <p class="sheet-lead">이제 <b>챌린지</b>에서 랭킹에 도전해요. 레벨이 오르면 <b>둘러보기 · 돌파 · 휘슬</b>이 하나씩 나오고, 처음 나올 때 화면이 알려 줘요.</p>
+    <button type="button" id="btn-tut-challenge" class="btn btn-primary"><span>챌린지 시작</span><small>닉네임만 정하면 바로</small></button>
+    <div class="btn-row"><button type="button" id="btn-tut-again" class="btn">한 번 더</button><button type="button" id="btn-tut-home" class="btn">처음으로</button></div>
   </div>
 </section>
 
@@ -254,6 +268,11 @@
 
 <!-- 게임 HUD -->
 <section id="hud" class="hud" hidden>
+  <div class="tut-card" id="tut-card" hidden>
+    <div class="tut-top"><span id="tut-prog">1 / 4</span><button type="button" id="btn-tut-skip" class="tut-skip">건너뛰기</button></div>
+    <b id="tut-title"></b><small id="tut-text"></small>
+  </div>
+  <div class="tut-swipe" id="tut-swipe" hidden aria-hidden="true">👆</div>
   <div class="fx-blind" id="fx-blind"><b>기억으로 패스!</b><small>수비가 안 붙은 친구 쪽을 눌러요</small></div>
   <div class="scorebug">
     <div class="sb-brand">FB</div>
@@ -313,6 +332,7 @@
       <div class="res-rank" id="res-rank" hidden></div>
       <button id="btn-submit" class="btn btn-primary" hidden><span>다시 등록하기</span></button>
       <p id="submit-msg" class="fine center"></p>
+      <a class="btn small fb-link" target="_blank" rel="noopener">💬 의견 보내기 (인스타 DM) · 시범 운영 중이에요</a>
       <div class="btn-row">
         <button id="btn-share" class="btn">결과 공유</button>
         <button id="btn-again" class="btn">다시 도전</button>

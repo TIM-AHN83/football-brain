@@ -104,6 +104,25 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .seg{display:flex;gap:4px;flex-wrap:wrap}
 .seg button{flex:1 1 auto;min-width:52px;min-height:40px;border:1px solid var(--line);background:rgba(244,246,251,.05);font:700 14px var(--body);padding:0 8px}
 .seg button.on{background:var(--sun);color:var(--ink);border-color:var(--sun)}
+/* ---------- 30초 따라 하기 · 베타 ---------- */
+.more-fields{display:grid;gap:12px;padding:8px 12px;background:rgba(244,246,251,.04);border:1px solid var(--line)}
+.more-fields summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--mist);padding:4px 0}
+.more-fields small{font-weight:400}
+.more-fields[open] summary{margin-bottom:4px}
+.beta{font:700 11px/1 var(--body);font-style:normal;background:var(--sun);color:var(--ink);padding:3px 6px;margin-left:6px;letter-spacing:.1em;vertical-align:middle}
+.foot-links{display:flex;gap:6px;align-items:center}
+.tut-card{position:absolute;left:max(12px,var(--sl));right:max(12px,var(--sr));top:calc(var(--st) + 58px);display:grid;gap:4px;padding:12px 14px;
+  background:rgba(11,20,40,.9);border:1px solid var(--sun);box-shadow:0 8px 24px rgba(0,0,0,.45)}
+.tut-top{display:flex;justify-content:space-between;align-items:center;font:800 13px/1 var(--num);color:var(--sun);letter-spacing:.12em}
+.tut-skip{pointer-events:auto;background:rgba(244,246,251,.06);border:1px solid var(--line);color:var(--mist);font:700 12px var(--body);padding:6px 10px}
+.tut-card b{font:400 24px/1.15 var(--display);color:var(--chalk)}
+.tut-card small{font:700 15px/1.45 var(--body);color:var(--chalk)}
+.tut-card em{font-style:normal;color:var(--sun)}
+.hud.tut .callout{top:calc(var(--st) + 178px)}
+.hint span.pulse{animation:hintPulse 1s ease-in-out infinite}
+@keyframes hintPulse{50%{background:rgba(255,201,60,.85);color:var(--ink)}}
+.tut-swipe{position:absolute;left:50%;bottom:calc(var(--sb) + 130px);font-size:46px;line-height:1;pointer-events:none;text-shadow:0 4px 12px rgba(0,0,0,.5);animation:tutSwipe 1.5s ease-in-out infinite}
+@keyframes tutSwipe{0%{transform:translate(-50%,0);opacity:0}15%{opacity:1}70%{transform:translate(30px,-190px);opacity:1}100%{transform:translate(38px,-220px);opacity:0}}
 .seg.big button{min-height:46px;font-size:15px}
 .res-rank{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .rr{display:grid;gap:3px;align-content:start;text-align:left;padding:10px 12px;background:rgba(244,246,251,.05);border:1px solid var(--line);border-left:3px solid var(--sun);color:var(--chalk);font:inherit}
