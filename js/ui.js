@@ -19,7 +19,7 @@ export class UI {
     this.el = {
       hud: $('#hud'), score: $('#hud-score'), level: $('#hud-level'), combo: $('#hud-combo'), lives: $('#hud-lives'), attack: $('#hud-attack'),
       callout: $('#hud-callout'), center: $('#hud-center'), pop: $('#hud-pop'), voice: $('#hud-voice'), timer: $('#hud-timer'), timerBar: $('#hud-timer i'),
-      hint: $('#hud-hint'), feet: $('#m-feet'), mic: $('#m-mic'), mot: $('#mot-choices'), edgeL: $('#fx-edge-l'), edgeR: $('#fx-edge-r'), flash: $('#fx-flash'), toast: $('#toast'),
+      hint: $('#hud-hint'), zone: $('#fx-zone'), feet: $('#m-feet'), mic: $('#m-mic'), mot: $('#mot-choices'), edgeL: $('#fx-edge-l'), edgeR: $('#fx-edge-r'), flash: $('#fx-flash'), toast: $('#toast'),
     };
     this._feet = -1;
   }
@@ -69,11 +69,23 @@ export class UI {
     this._feet = frac; this.el.feet.hidden = false; this.el.feet.querySelector('i').style.setProperty('--v', Math.round(frac * 100) + '%');
   }
   mic(state) { const m = this.el.mic; m.hidden = !state || state === 'off'; m.classList.toggle('live', state === 'live'); m.classList.toggle('hear', state === 'hear'); }
-  hint(mode) {
+  // 아래 안내 줄 = 누르는 자리 (2칸: 왼쪽·오른쪽, 3칸: 왼쪽·가운데·오른쪽)
+  hint(mode, zones = 2) {
     const h = this.el.hint;
-    h.hidden = mode === 'mot';
-    if (mode === 'shot') h.innerHTML = '<span><em>탭 1</em>← 왼쪽 슛</span><span></span><span><em>탭 2</em>오른쪽 슛 →</span>';
-    else h.innerHTML = '<span><em>탭 1</em>← 왼쪽</span><span><em>꾹</em>↑ 돌파</span><span><em>탭 2</em>오른쪽 →</span>';
+    h.hidden = mode === 'mot'; this._zones = zones;
+    h.className = 'hint z' + zones + (mode === 'shot' ? ' shot' : '');
+    const cells = mode === 'shot' ? [['L', '← 왼쪽 슛'], ['C', '↑ 칩슛'], ['R', '오른쪽 슛 →']]
+      : zones === 3 ? [['L', '← 왼쪽 패스'], ['C', '↑ 돌파'], ['R', '오른쪽 패스 →']] : [['L', '← 왼쪽 패스'], ['R', '오른쪽 패스 →']];
+    h.innerHTML = cells.map(([z, t]) => `<span data-z="${z}">${t}</span>`).join('');
+  }
+  // 누른 칸을 잠깐 밝힌다 (어느 칸이 눌렸는지 바로 보이게)
+  zoneFlash(zone, zones) {
+    const c = this.el.hint.querySelector(`[data-z="${zone}"]`);
+    if (c) { c.classList.remove('hit'); void c.offsetWidth; c.classList.add('hit'); }
+    const f = this.el.zone; if (!f) return;
+    const [a, b] = zones === 3 ? (zone === 'L' ? [0, 35] : zone === 'C' ? [35, 65] : [65, 100]) : (zone === 'L' ? [0, 50] : [50, 100]);
+    f.style.left = a + '%'; f.style.width = (b - a) + '%';
+    f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
   }
   motChoices(nums, cb) {
     const m = this.el.mot; m.hidden = false;

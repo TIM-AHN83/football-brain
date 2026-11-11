@@ -165,13 +165,13 @@
     <ol class="howto">
       <li><b>드리블하며 앞을 본다</b><span>폰을 들고 발을 움직이면 화면 속 내가 달려요. 노란 유니폼이 우리 팀이에요.</span></li>
       <li><b>빨간 수비수가 번쩍!</b><span>멀리서 수비수가 아주 잠깐 보였다가 사라져요. 수비수가 막은 반대쪽으로 패스!</span></li>
-      <li><b>탭으로 패스</b>
-        <span class="keys"><em>한 번 탭</em> 왼쪽 패스 <em>두 번 탭</em> 오른쪽 패스 <em>꾹 누르기</em> 양쪽 다 막혔을 때 드리블 돌파</span></li>
+      <li><b>누른 자리로 패스</b>
+        <span class="keys"><em>화면 왼쪽</em> 왼쪽 패스 <em>화면 오른쪽</em> 오른쪽 패스 <em>화면 가운데</em> 양쪽 다 막혔을 때 드리블 돌파 (레벨 3부터)</span></li>
       <li><b>외치면 보너스</b><span>"7번 패스!"처럼 받을 친구의 <u>등번호 + 패스</u>를 외쳐요. 진짜 경기의 콜플레이예요.</span></li>
       <li><b>어깨 체크 · 휘슬</b><span>"뒤!" 신호가 뜨면 폰을 돌려 뒤를 확인해요. 휘슬이 울리면 아무것도 누르지 말고 멈춤!</span></li>
-      <li><b>슛으로 마무리</b><span>골키퍼가 움직인 반대쪽으로 슛(한 번=왼쪽, 두 번=오른쪽). 골을 넣으면 레벨 업!</span></li>
+      <li><b>1:1 슛으로 마무리</b><span>골대 앞에서 골키퍼를 봐요. 한쪽으로 쏠리면 <u>반대쪽</u>을 누르고, 앞으로 뛰어나와 크게 막아서면 <u>가운데</u>를 눌러 머리 위로 칩슛! 골을 넣으면 레벨 업.</span></li>
     </ol>
-    <p class="fine">컴퓨터: ← 왼쪽 · → 오른쪽 · ↑ 돌파 · 마우스 끌기로 둘러보기</p>
+    <p class="fine">컴퓨터: ← 왼쪽 · → 오른쪽 · ↑ 가운데(돌파·칩슛) · 마우스 끌기로 둘러보기</p>
   </div>
 </section>
 
@@ -184,7 +184,7 @@
       <button class="drill" data-drill="flash"><span class="d-tag">기본</span><b>플래시 패스</b><small>잠깐 보인 수비수 반대로 패스 · 12번</small></button>
       <button class="drill" data-drill="shoulder"><span class="d-tag t1">아이디어 1</span><b>어깨 체크 360</b><small>폰을 돌려 뒤를 확인하는 습관 · 스캔 횟수 측정</small></button>
       <button class="drill" data-drill="mot"><span class="d-tag t2">아이디어 2</span><b>등번호 추적</b><small>섞이는 친구들 속 등번호 기억 · 8라운드</small></button>
-      <button class="drill" data-drill="brake"><span class="d-tag t3">아이디어 3</span><b>판단 브레이크</b><small>휘슬엔 멈춤, 양쪽 막히면 돌파 · 14번</small></button>
+      <button class="drill" data-drill="brake"><span class="d-tag t3">아이디어 3</span><b>판단 브레이크</b><small>휘슬엔 멈춤, 양쪽 막히면 가운데 돌파 · 14번</small></button>
     </div>
     <div class="field"><span>시작 레벨</span>
       <div class="seg" id="seg-dlevel"><button type="button" data-v="1">1</button><button type="button" data-v="3">3</button><button type="button" data-v="5">5</button><button type="button" data-v="8">8</button><button type="button" data-v="12">12</button></div></div>
@@ -210,8 +210,6 @@
       <div class="seg" id="seg-quality"><button type="button" data-v="auto">자동</button><button type="button" data-v="low">낮음</button><button type="button" data-v="mid">보통</button><button type="button" data-v="high">높음</button></div></div>
     <div class="field"><span>소리</span>
       <div class="seg" id="seg-sound"><button type="button" data-v="on">켜기</button><button type="button" data-v="quiet">작게</button><button type="button" data-v="off">끄기</button></div></div>
-    <div class="field"><span>탭 인식 간격 <small>(두 번 탭이 잘 안 되면 늘리기)</small></span>
-      <div class="seg" id="seg-tap"><button type="button" data-v="220">빠름</button><button type="button" data-v="280">보통</button><button type="button" data-v="360">느림</button></div></div>
     <div class="field"><span>마이크 테스트</span>
       <button id="btn-mictest" class="btn small">말해 보기 ("10번 패스")</button>
       <p id="mic-out" class="mic-out">—</p><a id="btn-openchrome2" class="btn small" hidden>크롬으로 열기</a></div>
@@ -262,7 +260,8 @@
   <div class="hud-pop" id="hud-pop"></div>
   <div class="hud-voice" id="hud-voice"></div>
   <div class="timer" id="hud-timer"><i></i></div>
-  <div class="hint" id="hud-hint"><span><em>탭 1</em>← 왼쪽</span><span><em>꾹</em>↑ 돌파</span><span><em>탭 2</em>오른쪽 →</span></div>
+  <div class="fx-zone" id="fx-zone"></div>
+  <div class="hint" id="hud-hint"><span data-z="L">← 왼쪽 패스</span><span data-z="R">오른쪽 패스 →</span></div>
   <div class="mot-choices" id="mot-choices" hidden></div>
   <div id="touch-layer" aria-label="탭 영역"></div>
 </section>

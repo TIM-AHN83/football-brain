@@ -63,12 +63,12 @@ async function boot() {
   game = new Game({ world, ui, audio, sensors, opts: { voice: settings.voice, motion: settings.motion, gyro: settings.gyro } });
   game.onEnd = onEnd;
   gestures = new Gestures($('#touch-layer'), {
-    onTap: (kind, t) => game.onInput(kind, t),
+    zones: () => game.zones(),
+    onTap: (zone, t, n) => { ui.zoneFlash(zone, n); game.onInput(zone, t); },
     onLook: (dx) => { game.look.drag -= dx * 0.0065; game.look.dragAt = performance.now(); },
     onLookKey: (v) => { game.look.key = v; },
     onPause: () => { if (state === 'play') pauseGame(); },
   });
-  gestures.dbl = settings.tap;
   voice.onText = (all, final, best) => {
     lastHeard = best;
     if (state !== 'play') { if (state === 'mictest' && micOut && best) { micHeard = best; micOut.textContent = `들리는 중: "${best}"`; } return; }
@@ -166,7 +166,7 @@ function openSetup(mode, level = 1) {
   $('#tg-motion').checked = settings.motion && !PREVIEW; $('#tg-gyro').checked = settings.gyro && !PREVIEW;
   $('#tg-motion').disabled = $('#tg-gyro').disabled = PREVIEW;
   const warns = [];
-  if (PREVIEW) warns.push('미리보기 링크라서 마이크·센서가 꺼져 있어요. 탭(한 번·두 번·꾹)과 화면 끌기로 해 보세요. 정식 주소에서는 음성 콜과 발 센서가 모두 켜져요.');
+  if (PREVIEW) warns.push('미리보기 링크라서 마이크·센서가 꺼져 있어요. 화면 왼쪽·가운데·오른쪽 누르기와 화면 끌기로 해 보세요. 정식 주소에서는 음성 콜과 발 센서가 모두 켜져요.');
   else if (!voice.supported) warns.push(micHelp(inApp ? 'inapp' : 'unsupported', ENV) + ' 음성 콜 없이 진행해요.');
   $('#mic-check').hidden = !voice.supported || PREVIEW;
   if (!secure && !PREVIEW) warns.push('보안 연결(https)이 아니라서 센서와 마이크가 막혀요. https 주소로 열어 주세요.');
@@ -286,7 +286,6 @@ void pSeg;
 $('#btn-settings').addEventListener('click', () => ui.open('scr-settings'));
 seg('seg-quality', settings.quality, v => { settings.quality = v; setSettings(settings); ui.toast('다음에 게임을 열 때 적용돼요'); });
 seg('seg-sound', settings.sound, v => { settings.sound = v; setSettings(settings); audio.setMode(v); audio.unlock(); audio.ok(); });
-seg('seg-tap', settings.tap, v => { settings.tap = +v; setSettings(settings); gestures.dbl = +v; });
 // ---------- 마이크 확인 (시작 준비 화면·설정 화면 공통) ----------
 let micOut = null, micHeard = '', micTimer = null;
 async function micCheck(out, chromeBtn) {
@@ -344,6 +343,7 @@ async function demo(which) {
   } else if (which === 'play' || which === 'mot' || which === 'shoulder') {
     if (!getProfile()) setProfile({ nick: '미리보기', age: 'u10', team: '', num: 7 });
     ui.go('none'); game.endCinematic(); game.opts.voice = false;
+    game.forceShot = params.has('shot'); game.forceTell = params.get('tell'); // 개발용: ?demo=play&shot&tell=rush|side
     game.start(which === 'play' ? 'challenge' : which, { level: lv });
     if (which === 'play') { game.level = lv; game.newAttack(true); }
     gestures.enabled = true; state = 'play';
@@ -352,10 +352,11 @@ async function demo(which) {
   }
 }
 
-// 개발용: ?debug 에서 v 키로 음성 입력 흉내
+// 개발용: ?debug 에서 v 키로 음성 입력 흉내 (콘솔에서 window.__fb 로 게임 상태 보기)
 if (params.has('debug')) window.addEventListener('keydown', (e) => {
   if (e.key === 'v' && state === 'play') { const t = prompt('들린 말 (예: 7번 패스)'); if (t) voice.onText(t, true, t); }
 });
 
 const booted = boot();
+if (params.has('debug')) booted.then(() => { window.__fb = { game, world, ui }; });
 if (params.get('demo')) booted.then(() => setTimeout(() => demo(params.get('demo')), 700));

@@ -39,6 +39,7 @@ export class World {
     this.rig.add(this.yaw); this.yaw.add(this.bob); this.bob.add(this.camera);
     this.camera.position.y = EYE; this.scene.add(this.rig);
     this.pitchDown = -0.27;
+    this.baseFov = 70; this.zoom = 1; this.zoomTarget = 1; this.shakeAmt = 0; // 슛 장면 확대·돌파 순간 넓게·골 흔들림
     this.time = 0; this.excite = 0; this.exciteTarget = 0.08;
     this.envs = {}; this.pmrem = new THREE.PMREMGenerator(r);
 
@@ -532,6 +533,18 @@ export class World {
     this.crowdMat.uniforms.uLight.value = T.crowd;
   }
 
+  // 슛 장면: 골대 폭(halfW, m)이 거리 dist 에서 화면 폭의 frac 만큼 차게 하는 확대 배율
+  zoomToFit(halfW, dist, frac = .88) {
+    const hHalf = Math.tan(this.baseFov * Math.PI / 360) * this.camera.aspect;
+    return Math.max(1, Math.min(1.5, hHalf / (halfW / dist / frac)));
+  }
+  setZoom(z, snap = false) { this.zoomTarget = z; if (snap) { this.zoom = z; this.applyFov(); } }
+  applyFov() {
+    this.camera.fov = 2 * Math.atan(Math.tan(this.baseFov * Math.PI / 360) / this.zoom) * 180 / Math.PI;
+    this.camera.updateProjectionMatrix();
+  }
+  shake(a) { this.shakeAmt = Math.max(this.shakeAmt, a); } // 골이 들어갈 때 화면 흔들림
+
   setExcite(v, hold = 0) { this.excite = Math.max(this.excite, v); this.exciteHold = hold; }
 
   resize() {
@@ -540,10 +553,10 @@ export class World {
     const asp = w / h; this.camera.aspect = asp;
     if (asp < 1) { // 세로 화면: 가로 시야 ~52°, 세로 최대 92°
       const hf = 54 * Math.PI / 180;
-      this.camera.fov = Math.min(92, 2 * Math.atan(Math.tan(hf / 2) / asp) * 180 / Math.PI);
+      this.baseFov = Math.min(92, 2 * Math.atan(Math.tan(hf / 2) / asp) * 180 / Math.PI);
       this.pitchDown = -0.27;
-    } else { this.camera.fov = 58; this.pitchDown = -0.16; }
-    this.camera.updateProjectionMatrix();
+    } else { this.baseFov = 58; this.pitchDown = -0.16; }
+    this.applyFov();
   }
   setDpr(d) { this.dpr = d; this.renderer.setPixelRatio(d); this.resize(); }
 
@@ -559,6 +572,11 @@ export class World {
     this.sun.target.position.set(p.x + fwd.x, 0, p.z + fwd.z);
     this.sun.position.set(this.sun.target.position.x + this.sunDir.x * 90, this.sunDir.y * 90, this.sun.target.position.z + this.sunDir.z * 90);
     this.camera.rotation.x = this.pitchDown;
+    if (Math.abs(this.zoomTarget - this.zoom) > 1e-3) { this.zoom += (this.zoomTarget - this.zoom) * Math.min(1, dt * 3.2); this.applyFov(); }
+    if (this.shakeAmt > 0.002) {
+      this.shakeAmt *= Math.pow(0.004, dt);
+      this.camera.position.set((Math.random() - .5) * this.shakeAmt, EYE + (Math.random() - .5) * this.shakeAmt, 0);
+    } else if (this.shakeAmt) { this.shakeAmt = 0; this.camera.position.set(0, EYE, 0); }
     for (const b of this.boots) {
       const u = b.userData;
       if (u.kick > 0) {

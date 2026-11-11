@@ -139,6 +139,10 @@ function bodyMaterial(base) {
 
 const _q = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _qr = new THREE.Quaternion(), _ax = new THREE.Vector3();
 const AX = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) };
+// 골키퍼 옆걸음 진행도 (0~1): 0.22초에 쏠리고, hold 초 뒤 0.3초에 가운데로 돌아온다 (hold 가 null 이면 그대로)
+const smooth = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+export function shiftAmount(A) { return smooth(A.t / 0.22) * (1 - (A.hold == null ? 0 : smooth((A.t - 0.22 - A.hold) / 0.3))); }
+export const shiftDone = (A) => A.hold != null && A.t > 0.52 + A.hold;
 const LOCO = ['idle', 'walk', 'jog', 'sprint'];
 const LOCO_AT = [0, 1.2, 4.2, 7.2]; // 이 속도(m/s)에서 그 동작이 100%
 
@@ -233,10 +237,11 @@ export class Person {
   special(A, dt) {
     const o = this.owner;
     const only = (k, wgt = 1) => { for (const [n, a] of Object.entries(this.act)) a.setEffectiveWeight(n === k ? wgt : 0); };
+    this.root.position.y = 0; // 낮추는 동작(태클·옆걸음)은 매 프레임 다시 정한다
     if (A.type === 'dive') {
       const k = Math.min(1, A.t / 0.45), e = 1 - (1 - k) ** 3;
       only('jump'); this.mixer.update(dt);
-      o.pos.x = A.x0 + A.side * 2.4 * e;
+      o.pos.x = A.x0 + A.side * (A.dist ?? 2.4) * e;
       o.pos.y = Math.sin(k * Math.PI) * 0.35;
       o.group.rotation.z = -A.side * 1.25 * e;
       this.bend('upperarm_l', 'z', (0.6 + 1.3 * e)); this.bend('upperarm_r', 'z', -(0.6 + 1.3 * e));
@@ -254,7 +259,48 @@ export class Person {
       this.bend('thigh_l', 'x', 0.15 * e); this.bend('calf_l', 'x', 1.7 * e); this.bend('thigh_l', 'z', 0.35 * e);
       this.bend('upperarm_l', 'z', 0.7 * e); this.bend('upperarm_r', 'z', -0.7 * e);
       this.bend('upperarm_l', 'x', 0.5 * e); this.bend('upperarm_r', 'x', 0.5 * e);
-      if (A.t > 1.1) { this.root.position.set(0, 0, 0); return true; }
+      if (A.t > (A.hold ?? 1.1)) { this.root.position.set(0, 0, 0); return true; }
+    } else if (A.type === 'shift') {
+      // 골키퍼 옆걸음: 무릎을 굽혀 낮추고 팔을 벌린 채 한쪽으로 쏠린다
+      const e = shiftAmount(A);
+      only('idle'); this.mixer.update(dt);
+      o.pos.x = A.x0 + A.side * A.dist * e;
+      o.group.rotation.z = -A.side * 0.2 * e;
+      this.root.position.y = -0.1 * e;
+      this.bend('thigh_l', 'x', -0.45 * e); this.bend('thigh_r', 'x', -0.45 * e);
+      this.bend('calf_l', 'x', 0.9 * e); this.bend('calf_r', 'x', 0.9 * e);
+      this.bend('spine_02', 'x', 0.3 * e);
+      this.bend('upperarm_l', 'z', 0.85 * e); this.bend('upperarm_r', 'z', -0.85 * e);
+      this.bend('lowerarm_l', 'x', -0.5 * e); this.bend('lowerarm_r', 'x', -0.5 * e);
+      if (shiftDone(A)) { o.group.rotation.z = 0; this.root.position.y = 0; return true; }
+    } else if (A.type === 'rush') {
+      // 골키퍼가 앞으로 뛰어나와(0.5초) 팔다리를 크게 벌려 막아선다(스타 자세) → 낮은 슛 길은 막히고, 머리 위가 빈다 → 칩슛
+      const yaw = o.group.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw);
+      if (A.t < A.run) {
+        const sp = A.dist / A.run; o.pos.x += fx * sp * dt; o.pos.z += fz * sp * dt;
+        this.pose(dt, 7.2);
+      } else {
+        const k = Math.min(1, (A.t - A.run) / 0.25), e = 1 - (1 - k) ** 3;
+        only('idle'); this.mixer.update(dt);
+        o.pos.x += fx * dt * 4 * (1 - k); o.pos.z += fz * dt * 4 * (1 - k);
+        o.pos.y = Math.sin(k * Math.PI) * 0.12;
+        this.root.position.y = -0.08 * e;
+        this.bend('thigh_l', 'z', 0.42 * e); this.bend('thigh_r', 'z', -0.42 * e);
+        this.bend('calf_l', 'x', 0.35 * e); this.bend('calf_r', 'x', 0.35 * e);
+        this.bend('spine_02', 'x', 0.15 * e);
+        this.bend('upperarm_l', 'z', 1.15 * e); this.bend('upperarm_r', 'z', -1.15 * e);
+        this.bend('lowerarm_l', 'z', 0.2 * e); this.bend('lowerarm_r', 'z', -0.2 * e);
+      }
+    } else if (A.type === 'catch') {
+      // 높은 공을 뛰어올라 두 손으로 잡는다
+      only('jump'); this.mixer.update(dt);
+      const k = Math.min(1, A.t / 0.5), up = Math.min(1, A.t / 0.2);
+      o.pos.y = Math.sin(k * Math.PI) * 0.45;
+      if (A.x1 != null) o.pos.x = A.x0 + (A.x1 - A.x0) * smooth(A.t / 0.4);
+      o.group.rotation.z = 0;
+      this.bend('upperarm_l', 'z', 2.6 * up); this.bend('upperarm_r', 'z', -2.6 * up);
+      this.bend('lowerarm_l', 'z', 0.25 * up); this.bend('lowerarm_r', 'z', -0.25 * up);
+      if (A.t > 1.4) { o.pos.y = 0; return true; }
     } else if (A.type === 'cheer') {
       only('idle'); this.mixer.update(dt);
       o.pos.y = Math.abs(Math.sin(A.t * 7)) * 0.25;
