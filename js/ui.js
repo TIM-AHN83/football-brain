@@ -73,6 +73,7 @@ export class UI {
   hint(mode, zones = 2) {
     const h = this.el.hint;
     h.hidden = mode === 'mot'; this._zones = zones;
+    if (mode === 'shot') { h.className = 'hint z1 shot'; h.innerHTML = '<span data-z="S">↑ 골대 쪽으로 쓸어 올려 슛 · 빠르게 쓸수록 세고 높게</span>'; return; }
     h.className = 'hint z' + zones + (mode === 'shot' ? ' shot' : '');
     const cells = mode === 'shot' ? [['L', '← 왼쪽 슛'], ['C', '↑ 칩슛'], ['R', '오른쪽 슛 →']]
       : zones === 3 ? [['L', '← 왼쪽 패스'], ['C', '↑ 돌파'], ['R', '오른쪽 패스 →']] : [['L', '← 왼쪽 패스'], ['R', '오른쪽 패스 →']];
@@ -86,6 +87,14 @@ export class UI {
     const [a, b] = zones === 3 ? (zone === 'L' ? [0, 35] : zone === 'C' ? [35, 65] : [65, 100]) : (zone === 'L' ? [0, 50] : [50, 100]);
     f.style.left = a + '%'; f.style.width = (b - a) + '%';
     f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
+  }
+  // 슛: 쓸어 올린 자국
+  swipeTrail(sw) {
+    if (sw.x0 == null) return;
+    const d = document.createElement('div'), dx = sw.x1 - sw.x0, dy = sw.y1 - sw.y0;
+    d.className = 'swipe-trail';
+    d.style.cssText = `left:${sw.x0}px;top:${sw.y0}px;width:${Math.hypot(dx, dy)}px;transform:rotate(${Math.atan2(dy, dx)}rad)`;
+    this.el.hud.appendChild(d); setTimeout(() => d.remove(), 500);
   }
   // 둘러보기 패스: 공을 받는 순간 화면 가리기
   blind(on) {
@@ -191,7 +200,7 @@ export class UI {
       [s.mode === 'mot' ? '등번호 기억' : '최단 플래시', s.mode === 'mot' ? `${s.mot[0]}<small>/${s.mot[1]}</small>` : (s.minFlash ? `${s.minFlash}<small>ms</small>` : '–')],
       ['콜 성공', s.voiceOn ? `${s.calls}<small>/${s.callChances}</small>` : '<small>꺼짐</small>'],
       ['스캔', `${s.scanPerMin}<small>/분</small>`],
-      s.mode === 'challenge' ? ['골', `${s.goals}<small>/${s.shots}</small>`]
+      s.mode === 'challenge' || s.mode === 'shoot' ? ['골', `${s.goals}<small>/${s.shots}</small>`]
         : s.mode === 'scan' ? ['둘러보기 패스', `${s.scanRound[0]}<small>/${s.scanRound[1]}</small>`]
         : ['멈춤 성공', s.whistle[1] ? `${s.whistle[0]}<small>/${s.whistle[1]}</small>` : '–'],
       ['발 움직임', s.feetOn ? `${s.stepsPerMin}<small>걸음/분</small>` : '<small>꺼짐</small>'],

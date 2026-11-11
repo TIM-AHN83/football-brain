@@ -177,9 +177,8 @@ export class Footballer {
   dive(side, dist = 2.4) { this.anim = { type: 'dive', t: 0, side, x0: this.pos.x, dist }; }
   tackle(dirX, dirZ, hold = 1.1) { this.anim = { type: 'tackle', t: 0, dx: dirX, dz: dirZ, hold }; }
   celebrate() { this.anim = { type: 'cheer', t: 0 }; }
-  // 골키퍼: 한쪽으로 옆걸음(hold 초 뒤 가운데로 돌아옴, null 이면 그대로) / 앞으로 뛰어나와 몸 던지기 / 뛰어올라 잡기
+  // 골키퍼: 한쪽으로 옆걸음·무게 싣기(hold 초 뒤 가운데로 돌아옴, null 이면 그대로) / 뛰어올라 잡기
   shift(side, dist, hold = null) { this.anim = { type: 'shift', t: 0, side, dist, hold, x0: this.pos.x }; }
-  rush(dist) { this.anim = { type: 'rush', t: 0, dist, run: 0.5 }; }
   catchHigh(x = null) { this.anim = { type: 'catch', t: 0, x0: this.pos.x, x1: x }; }
 
   update(dt) {
@@ -253,15 +252,6 @@ export class Footballer {
       this.arms.forEach(a => { a.sh.rotation.x = 0; a.sh.rotation.z = a.s * 0.9 * e; a.el.rotation.x = -0.3; });
       this.legs.forEach(l => { l.th.rotation.x = -0.4 * e; l.kn.rotation.x = 0.8 * e; });
       if (shiftDone(A)) { this.anim = null; this.group.rotation.z = 0; this.hips.position.y = 0.92; }
-    } else if (A.type === 'rush') {
-      const yaw = this.group.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw);
-      if (A.t < A.run) { const sp = A.dist / A.run; this.pos.x += fx * sp * dt; this.pos.z += fz * sp * dt; this.pose(dt, 7); }
-      else {
-        const k = Math.min(1, (A.t - A.run) / 0.25), e = k * k * (3 - 2 * k);
-        this.pos.x += fx * dt * 4 * (1 - k); this.pos.z += fz * dt * 4 * (1 - k);
-        this.arms.forEach(a => { a.sh.rotation.x = 0; a.sh.rotation.z = a.s * 1.2 * e; a.el.rotation.x = 0; });
-        this.legs.forEach(l => { l.th.rotation.x = 0; l.th.rotation.z = l.s * 0.4 * e; l.kn.rotation.x = 0.2 * e; });
-      }
     } else if (A.type === 'catch') {
       const k = Math.min(1, A.t / 0.5); this.pos.y = Math.sin(k * Math.PI) * 0.45; this.group.rotation.z = 0;
       if (A.x1 != null) this.pos.x = A.x0 + (A.x1 - A.x0) * Math.min(1, A.t / 0.4);

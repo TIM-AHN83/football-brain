@@ -68,7 +68,9 @@ async function boot() {
   game.onEnd = onEnd;
   gestures = new Gestures($('#touch-layer'), {
     zones: () => game.zones(),
-    onTap: (zone, t, n) => { ui.zoneFlash(zone, n); game.onInput(zone, t); },
+    onTap: (zone, t, n) => { if (!game.swipeMode()) ui.zoneFlash(zone, n); game.onInput(zone, t); },
+    swipeMode: () => game.swipeMode(),
+    onSwipe: (sw) => { ui.swipeTrail(sw); game.onSwipe(sw); },
     onLook: (dx) => { game.look.drag -= dx * 0.0065; game.look.dragAt = performance.now(); },
     onLookKey: (v) => { game.look.key = v; },
     onPause: () => { if (state === 'play') pauseGame(); },
@@ -367,10 +369,10 @@ async function demo(which) {
     onEnd({ mode: 'challenge', title: '챌린지', ranked: true, score: 18420, level: 6, accuracy: 82, avgRt: 612, decisions: 28, correct: 23, calls: 9, callChances: 14,
       goals: 5, shots: 6, scans: 21, scanPerMin: 7.4, minFlash: 470, whistle: [2, 3], both: [3, 4], scanRound: [4, 5], unseen: 0, mot: [0, 0], steps: 380, stepsPerMin: 134,
       duration: 170, axes: { judge: .82, speed: .81, vision: .71, call: .64, scan: .41, brake: .67 }, brainIndex: 74, voiceOn: true, feetOn: true });
-  } else if (which === 'play' || which === 'mot' || which === 'scan') {
+  } else if (which === 'play' || which === 'mot' || which === 'scan' || which === 'shoot') {
     if (!getProfile()) setProfile({ nick: '미리보기', age: 'u10', team: '', num: 7 });
     ui.go('none'); game.endCinematic(); game.opts.voice = false;
-    game.forceShot = params.has('shot'); game.forceTell = params.get('tell'); // 개발용: ?demo=play&shot&tell=rush|side
+    game.forceShot = params.has('shot'); // 개발용: ?demo=play&shot (슛 장면으로 바로)
     game.start(which === 'play' ? 'challenge' : which, { level: lv });
     if (which === 'play') { game.level = lv; game.newAttack(true); }
     gestures.enabled = true; state = 'play';

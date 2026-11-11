@@ -273,24 +273,6 @@ export class Person {
       this.bend('upperarm_l', 'z', 0.85 * e); this.bend('upperarm_r', 'z', -0.85 * e);
       this.bend('lowerarm_l', 'x', -0.5 * e); this.bend('lowerarm_r', 'x', -0.5 * e);
       if (shiftDone(A)) { o.group.rotation.z = 0; this.root.position.y = 0; return true; }
-    } else if (A.type === 'rush') {
-      // 골키퍼가 앞으로 뛰어나와(0.5초) 팔다리를 크게 벌려 막아선다(스타 자세) → 낮은 슛 길은 막히고, 머리 위가 빈다 → 칩슛
-      const yaw = o.group.rotation.y, fx = Math.sin(yaw), fz = Math.cos(yaw);
-      if (A.t < A.run) {
-        const sp = A.dist / A.run; o.pos.x += fx * sp * dt; o.pos.z += fz * sp * dt;
-        this.pose(dt, 7.2);
-      } else {
-        const k = Math.min(1, (A.t - A.run) / 0.25), e = 1 - (1 - k) ** 3;
-        only('idle'); this.mixer.update(dt);
-        o.pos.x += fx * dt * 4 * (1 - k); o.pos.z += fz * dt * 4 * (1 - k);
-        o.pos.y = Math.sin(k * Math.PI) * 0.12;
-        this.root.position.y = -0.08 * e;
-        this.bend('thigh_l', 'z', 0.42 * e); this.bend('thigh_r', 'z', -0.42 * e);
-        this.bend('calf_l', 'x', 0.35 * e); this.bend('calf_r', 'x', 0.35 * e);
-        this.bend('spine_02', 'x', 0.15 * e);
-        this.bend('upperarm_l', 'z', 1.15 * e); this.bend('upperarm_r', 'z', -1.15 * e);
-        this.bend('lowerarm_l', 'z', 0.2 * e); this.bend('lowerarm_r', 'z', -0.2 * e);
-      }
     } else if (A.type === 'catch') {
       // 높은 공을 뛰어올라 두 손으로 잡는다
       only('jump'); this.mixer.update(dt);

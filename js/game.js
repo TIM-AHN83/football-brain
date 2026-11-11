@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { Footballer } from './player.js';
 import { PITCH } from './world.js';
 import { parseCall } from './voice.js';
+import { shiftAmount } from './people.js';
 
 const NUMS = [7, 10, 11, 9, 8, 17, 19, 14, 22, 23, 6, 4, 20, 21, 18, 16, 13, 3, 2, 5];
 const START_Z = 36, SHOT_Z = -PITCH.HL + 21; // 랠리는 페널티 박스 앞(SHOT_Z)까지
@@ -41,6 +42,7 @@ export const MODES = {
   scan:      { title: '둘러보기 패스', lives: 0, total: 10, types: { scan: 1 } },
   brake:     { title: '판단 브레이크', lives: 0, total: 14, types: { pass: .4, both: .3, whistle: .3 } },
   mot:       { title: '등번호 추적', lives: 0, total: 8 },
+  shoot:     { title: '1:1 슛', lives: 0, total: 10, shootOnly: true },
 };
 
 export class Game {
@@ -108,7 +110,7 @@ export class Game {
     this.defs.forEach(d => { d.setVisible(false); d.glow(0); });
     this.presser = this.defs[3]; this.presser.setVisible(true); this.presser.setRing(false);
     this.presser.place(rnd(-1.5, 1.5), START_Z - 11, 0, START_Z); this.presser.maxSpeed = 3;
-    this.keeper.setVisible(this.M.shots); this.keeper.place(0, KEEPER_Z, 0, 0); this.keeper.face = new THREE.Vector3(0, 0, 0);
+    this.keeper.setVisible(!!(this.M.shots || this.M.shootOnly)); this.keeper.place(0, KEEPER_Z, 0, 0); this.keeper.face = new THREE.Vector3(0, 0, 0);
     this.ballCarry();
     if (this.M.shots) this.ui.attack(this.attackSize, 0);
     this.ui.hint('pass', this.passZones());
@@ -124,7 +126,8 @@ export class Game {
 
   // 화면 칸 수: 돌파(양쪽 막힘)가 나오는 판과 슛은 왼쪽·가운데·오른쪽 3칸, 나머지는 왼쪽·오른쪽 2칸
   passZones() { const t = this.M?.types || this.spec?.types || {}; return t.both ? 3 : 2; }
-  zones() { return this.phase && this.phase.startsWith('shot') ? 3 : this.passZones(); }
+  zones() { return this.phase && this.phase.startsWith('shot') ? 2 : this.passZones(); }
+  swipeMode() { return !!(this.phase && this.phase.startsWith('shot')); } // 슛 장면: 화면을 쓸어 올려 찬다
 
   // ---------- 랠리 ----------
   makeRally() {
@@ -150,7 +153,7 @@ export class Game {
     if (this.M.shots) this.ui.attack(this.attackSize, this.rallyIdx);
     if (S.badges === 'always') this.showBadges(0);
     else if (S.badges === 'rally') this.showBadges(1300);
-    if (this.forceShot && this.M.shots) { this.me.z = Math.min(this.me.z, SHOT_Z + 3); return this.shotRun(); } // 개발용 ?shot
+    if ((this.forceShot && this.M.shots) || this.M.shootOnly) { this.me.z = Math.min(this.me.z, SHOT_Z + 3); return this.shotRun(); } // 훈련장 1:1 슛, 개발용 ?shot
     if (r.kind === 'scan') return this.scanStart(r);
     // 등번호 섞기 (레벨 7+): 배지가 꺼진 뒤 두 친구가 X자로 엇갈려 뛴다
     if (S.shuffle && Math.random() < .5) this.after(1000, () => { const [a, b] = this.mates; [a.rel, b.rel] = [b.rel, a.rel]; });
@@ -204,8 +207,10 @@ export class Game {
   onInput(kind, tReal) {
     if (this.paused) return;
     if (kind === 'C' && this.zones() < 3) return;
-    if (this.phase === 'shotDecide') return this.resolveShot(kind, tReal);
-    if ((this.phase === 'shotRun' || this.phase === 'shotSet') && !this.shotEarly) { this.shotEarly = true; this.ui.callout('아직! 골키퍼를 봐요', 'warn', 800); return; }
+    if (this.phase && this.phase.startsWith('shot')) { // 슛은 탭이 아니라 쓸어 올리기
+      if (this.phase === 'shotDecide' && !this.rally.tapHint) { this.rally.tapHint = true; this.ui.callout('톡 누르지 말고, 골대 쪽으로 쓸어 올려요!', 'warn', 1400); }
+      return;
+    }
     if ((this.phase === 'build' || this.phase === 'scanSet' || this.phase === 'scan') && this.rally && !this.rally.early) {
       this.rally.early = true; this.ui.callout(this.phase === 'build' ? '아직! 보고 판단해요' : '아직! 공이 오면 패스해요', 'warn', 800); return;
     }
@@ -489,25 +494,26 @@ export class Game {
     }, 2200);
   }
 
-  // ---------- 슛 (1:1 찬스) ----------
-  // 골대 10m 앞까지 달려 들어가 골키퍼와 1:1.
-  // 골키퍼가 한쪽으로 쏠리면 → 반대쪽(빈 곳)으로 슛, 앞으로 뛰어나와 크게 막아서면 → 가운데 머리 위로 칩슛.
-  // LV1~3은 쏠린 채 그대로 있고, LV4부터는 잠깐 쏠렸다가 가운데로 돌아온다(점점 짧게).
+  // ---------- 슛 (1:1 찬스, 1.6부터 '쓸어서 차기') ----------
+  // 골대 10m 앞에서 공을 골대 쪽으로 쓸어 올려 찬다: 쓸어 올린 방향 = 슛 방향, 빠르기 = 힘(세게 찰수록 높게, 너무 세면 크로스바 위로).
+  // 골키퍼는 미리 정하지 않고 가운데에서 버티며 조금씩 다가온다(각도를 좁힘). 가끔 한쪽으로 무게를 싣는데(기울기),
+  // 그때 반대 구석으로 차면 역동작으로 반응이 늦고, 기운 쪽으로 차면 바로 막힌다. 공이 출발한 뒤 반응해서 몸을 날린다.
+  // 레벨이 오를수록 골키퍼 반응이 빠르고 손이 멀리 닿으며, 기울기는 짧아진다.
   shotRun() {
     this.phase = 'shotRun'; this.shotEarly = false;
-    this.ui.attack(this.attackSize, this.attackSize);
+    if (this.M.shots) this.ui.attack(this.attackSize, this.attackSize);
     const first = !this.stats.shots;
-    this.ui.callout(first ? '1:1 찬스! 골키퍼를 봐요' : '1:1 찬스!', 'warn', 1600);
-    if (first) this.after(800, () => this.ui.pop('쏠린 반대쪽으로 · 뛰어나오면 가운데 칩슛', 'small gold'));
-    this.ui.hint('shot', 3);
-    this.mates.forEach((m, i) => { if (i < 2) m.rel.set((i ? 1 : -1) * 7, 0, -2); });
+    this.ui.callout(first ? '1:1 찬스! 공을 골대 쪽으로 쓸어 올려 슛' : '1:1 찬스!', 'warn', first ? 2200 : 1400);
+    if (first) this.after(1000, () => this.ui.pop('골키퍼가 한쪽으로 기울 때 반대 구석으로!', 'small gold'));
+    this.ui.hint('shot');
+    this.mates.forEach((m, i) => { if (i < 2 && m.rel) m.rel.set((i ? 1 : -1) * 7, 0, -2); });
     // 둘러보기 패스처럼 천천히 진행된 공격이면 골대에서 멀다 → 화면을 잠깐 끊고 페널티 박스 앞으로 옮긴다
     if (this.me.z > SHOT_Z + 8) {
       this.ui.cut(); this.me.z = SHOT_Z + 3; this.me.v = 4; this.world.rig.position.z = this.me.z;
       this.mates.forEach(m => { if (m.group.visible && m.rel) m.place(this.me.x + m.rel.x, this.me.z + m.rel.z); });
     }
     this.presser.setVisible(false); this.defs.forEach(d => d.setVisible(false));
-    const k = this.keeper; k.place(0, KEEPER_Z, 0, 0); k.face = new THREE.Vector3(0, 0, 0);
+    const k = this.keeper; k.setVisible(true); k.place(0, KEEPER_Z, 0, 0); k.face = new THREE.Vector3(0, 0, 0);
     // 골대가 화면 폭에 거의 차도록 확대 (세로 폰은 조금, 가로 화면은 많이)
     this.world.setZoom(this.world.zoomToFit(3.66 + .3, SPOT_Z - .8 + PITCH.HL, .93));
     this.world.setExcite(.75, 2); this.audio.whoosh();
@@ -517,92 +523,164 @@ export class Game {
     if (this.phase !== 'shotRun') return;
     if (this.me.z > SPOT_Z + 0.4 && this.clock - (this.shotWaitStart ??= this.clock) < 4500) return this.after(80, () => this.waitShotSpot());
     this.shotWaitStart = null; this.phase = 'shotSet';
-    this.after(rnd(350, 850), () => this.shotOnset());
+    this.after(250, () => this.shotStart());
   }
-  shotOnset() {
+  // 골키퍼 능력 (레벨별): 반응 시간·다이빙 속도·기울기 길이
+  keeperSpec() {
+    const L = this.level;
+    return { rd: Math.max(.03, .12 - .01 * (L - 1)), vd: Math.min(8.5, 6.5 + .2 * (L - 1)), cueMs: Math.max(350, 1100 - 75 * (L - 1)) };
+  }
+  shotStart() {
     if (this.phase !== 'shotSet') return;
-    const L = this.level, k = this.keeper;
-    const tell = this.forceTell || (Math.random() < 1 / 3 ? 'rush' : 'side'), side = Math.random() < .5 ? -1 : 1;
-    const windowMs = Math.max(1100, 2400 - 120 * (L - 1));
-    this.rally = { kind: 'shot', tell, side, answer: tell === 'rush' ? 'C' : side < 0 ? 'R' : 'L', windowMs, voiceOpen: true, onsetReal: performance.now() };
+    const K = this.keeperSpec(), windowMs = Math.max(2300, 3800 - 150 * (this.level - 1));
+    this.rally = { kind: 'shot', windowMs, cueMs: K.cueMs, nextCue: this.clock + rnd(500, 1200), cues: 0, voiceOpen: true, onsetReal: performance.now() };
     this.phase = 'shotDecide'; this.stats.shots++;
-    // 화면 기준 왼쪽(-x) = 슈터의 왼쪽
-    if (tell === 'rush') { k.rush(3.6); this.audio.steps(); }
-    else k.shift(side, 1.75, L <= 3 ? null : Math.max(.35, 1.1 - .09 * (L - 4)));
-    k.glow(.6); this.after(120, () => k.glow(0)); this.audio.tick();
     this.ui.timer(1);
     this.rally.expire = this.after(windowMs, () => this.resolveShot(null));
   }
-  resolveShot(kind, tReal) {
+  // 슛 기다리는 동안: 골키퍼가 천천히 다가오고, 가끔 한쪽으로 무게를 싣는다
+  keeperUpdate(r) {
+    const k = this.keeper;
+    if (!k.anim) k.moveTo(0, Math.min(KEEPER_Z + 2.6, k.pos.z + 1), .65);
+    if (this.clock >= r.nextCue && !k.anim) {
+      const side = Math.random() < .5 ? -1 : 1;
+      k.shift(side, this.level <= 3 ? .75 : .55, r.cueMs / 1000); r.cues++; // LV1~3은 조금 크게 기운다
+      if (this.level <= 3) { k.glow(.3); this.after(160, () => k.glow(0)); } // 처음엔 살짝 번쩍여서 보는 법을 익힌다
+      r.nextCue = this.clock + 220 + r.cueMs + 300 + rnd(500, 1100);
+    }
+  }
+  keeperLean() { // 지금 골키퍼가 무게를 실은 쪽 (-1 / 0 / 1)
+    const A = this.keeper.anim;
+    return A && A.type === 'shift' && shiftAmount(A) > .45 ? A.side : 0;
+  }
+  // 쓸어 올린 각도 → 골대 위 가로 위치(x, m). 똑바로 위 = 가운데, 약 22~28° 기울이면 구석, 30° 넘으면 골대 밖
+  swipeAim(sw) { return clamp(6.4 * Math.tan(Math.atan2(sw.dx, -sw.dy)), -9, 9); }
+  // 쓸어 올린 빠르기 → 힘 (0 ~ 1.35). 화면 높이 기준 초당 몇 배를 쓸었는지로 잰다 (휴대폰마다 화면 크기가 달라도 같게)
+  shotPower(sw) { const vN = (Math.abs(sw.dy) / sw.H) / (sw.dt / 1000); return clamp(0.2 + (vN - 0.8) * 0.19, 0, 1.35); }
+
+  onSwipe(sw) {
+    if (this.paused) return;
+    if (this.phase === 'shotDecide') return this.resolveShot(sw);
+    if ((this.phase === 'shotRun' || this.phase === 'shotSet') && !this.shotEarly) { this.shotEarly = true; this.ui.callout('아직! 골대 앞까지 달려요', 'warn', 800); }
+  }
+  resolveShot(sw) {
     const r = this.rally; if (!r || r.resolved || this.phase !== 'shotDecide') return;
     if (r.expire) this.cancel(r.expire);
     r.resolved = true; this.phase = 'shotResolve'; this.ui.timer(null);
-    const input = kind || null;
-    const rt = tReal ? Math.max(0, Math.round(tReal - r.onsetReal)) : null;
-    const ok = input === r.answer; r.correct = ok; r.input = input;
     this.stats.decisions++; this.count++;
-    if (input) { this.world.kickBoot(input === 'L' ? -1 : 1, input === 'C' ? .9 : 1.3); this.audio.kick(input === 'C' ? .7 : 1); }
-    if (ok) this.shotGoal(r, input, rt); else { this.streak = 0; this.shotMiss(r, input); }
+    if (!sw) { this.streak = 0; r.correct = false; return this.shotTimeout(r); }
+    // 방향·힘 (컴퓨터 키보드는 ← ↑ → 로 왼쪽 구석·가운데·오른쪽 구석, 힘 75%)
+    const x = sw.key ? (sw.key === 'L' ? -2.9 : sw.key === 'R' ? 2.9 : 0) : this.swipeAim(sw);
+    const p = sw.key ? .75 : this.shotPower(sw);
+    const rt = Math.max(0, Math.round((sw.t ?? performance.now()) - r.onsetReal));
+    const k = this.keeper, K = this.keeperSpec(), HL = PITCH.HL, POST = 3.66, BAR = 2.44;
+    const lean = this.keeperLean();
+    const y = 0.15 + 2.5 * clamp((p - 0.3) / 0.75, 0, 1.25); // 골라인에서 공 높이: 세게 찰수록 높다
+    const s = 11 + 18 * Math.min(p, 1.2);                      // 공 빠르기 (m/s)
+    const b0 = this.ball.position.clone(); b0.y = .11;
+    const T = Math.hypot(x - b0.x, -HL - b0.z) / s;
+    // 골키퍼가 서 있는 줄을 공이 지나는 곳·때
+    const f = clamp((b0.z - k.pos.z) / (b0.z + HL), .05, 1), xc = b0.x + (x - b0.x) * f, yc = b0.y + (y - b0.y) * f, tc = T * f;
+    const off = Math.abs(xc - k.pos.x), side = Math.sign(xc - k.pos.x) || 1;
+    let rd = K.rd; if (lean === side) rd = 0; else if (lean === -side) rd += .25; // 기운 쪽이면 바로, 반대쪽이면 역동작
+    let reach = Math.min(3, .9 + Math.max(0, tc - rd) * K.vd);
+    if (yc > 2.1 && off > 1.2) reach -= .3; // 높은 구석은 손이 덜 닿는다
+    let out;
+    if (Math.abs(x) > POST + .15 || y > BAR + .2) out = y > BAR + .2 ? 'over' : 'wide';
+    else if (off <= reach - .12) out = 'save';
+    else if (off <= reach + .12) out = Math.random() < .5 ? 'save' : 'goal'; // 손끝 승부
+    else if (Math.abs(x) > POST - .13 || y > BAR - .13) out = Math.random() < .35 ? 'postIn' : 'post';
+    else out = 'goal';
+    r.shot = { x, y, p, lean, side, out, rt, xc, off, reach, tc, rd, kx: k.pos.x, kz: k.pos.z, bz: b0.z }; r.correct = out === 'goal' || out === 'postIn';
+    this.world.kickBoot(x < 0 ? -1 : 1, 1.3); this.audio.kick(.6 + .45 * Math.min(1, p));
+    this.ui.pop(`슛 파워 ${Math.round(Math.min(p, 1.35) * 100)}%`, 'small');
+    // 골키퍼: rd 초 뒤 공 쪽으로 몸을 날린다 (정면이면 그 자리에서 잡는다)
+    const save = out === 'save';
+    this.after(rd * 1000, () => {
+      if (off < .55) { if (yc > 1.5) k.catchHigh(k.pos.x); else k.dive(side, .35); }
+      else k.dive(side, clamp(save ? off - .25 : reach - .3, .3, 2.7));
+    });
+    const h = .08 + .25 * (1 - Math.min(1, p));
+    if (out === 'goal' || out === 'postIn') {
+      const to = out === 'postIn' ? new THREE.Vector3(Math.sign(x) * (POST - .12), y, -HL) : this.netPoint(x, y);
+      this.ballFly(to, T, h, () => {
+        if (out === 'postIn') { this.audio.kick(1); this.world.shake(.08); this.ballFly(this.netPoint(Math.sign(x) * 2.6, Math.min(y, 1.6)), .25, .05, () => this.shotGoal(r)); }
+        else this.shotGoal(r);
+      });
+      this.after(T * 520, () => { this.slow = { t: 0, dur: .9 }; }); // 공이 골문에 가까워지면 느린 화면
+    } else {
+      this.streak = 0;
+      if (save) {
+        const hand = new THREE.Vector3(xc, clamp(yc, .3, 2.3), k.pos.z + .25);
+        this.ballFly(hand, Math.max(tc, rd + .3), h * f, () => {
+          this.audio.touch(1);
+          if (p < .65 && off < 1.6) { this.ballHold(k, yc > 1.4); this.shotMiss(r); } // 잡았다
+          else { this.ballFly(new THREE.Vector3(xc + side * 5, .11, k.pos.z + rnd(2, 5)), .8, .7, () => { this.ballState = 'free'; }); this.shotMiss(r); } // 쳐냈다
+        });
+      } else if (out === 'post') {
+        this.ballFly(new THREE.Vector3(clamp(x, -POST + .1, POST - .1), Math.min(y, BAR - .05), -HL), T, h, () => {
+          this.audio.kick(1); this.world.shake(.08);
+          this.ballFly(new THREE.Vector3(x * .5 + rnd(-2, 2), .11, -HL + rnd(5, 8)), .9, .6, () => { this.ballState = 'free'; });
+          this.shotMiss(r);
+        });
+      } else { // 크로스바 위 · 골대 밖
+        const to = out === 'over' ? new THREE.Vector3(x * 1.1, y + 1.2, -HL - 5) : new THREE.Vector3(x * 1.3, y, -HL - 5);
+        this.ballFly(to, T * 1.4, h, () => { this.ballState = 'free'; this.shotMiss(r); });
+      }
+    }
     this.ui.setCombo(this.combo());
     this.after(1800, () => { r.voiceOpen = false; });
     this.checkCall();
   }
   // 공이 골망에 닿는 자리 (뒤 그물은 위에서 아래로 2m 비스듬히 뒤로 간다)
   netPoint(x, y) { return new THREE.Vector3(x, y, -PITCH.HL - 2 * (1 - y / 2.44) + .15); }
-  shotGoal(r, input, rt) {
-    const k = this.keeper;
-    this.stats.correct++; this.streak++; if (rt != null) this.stats.rts.push(rt); this.stats.goals++;
-    let x, y, T, h;
-    if (input === 'C') { x = rnd(-.5, .5); y = rnd(1.4, 1.75); T = 1.05; h = 1.8; } // 칩슛: 막아선 골키퍼 머리 위로
-    else { x = (input === 'L' ? -1 : 1) * rnd(2.55, 2.95); y = rnd(.35, 1.7); T = .55; h = .18; k.dive(r.side, 1.2); } // 골키퍼는 쏠린 쪽으로 다이빙
-    this.ballFly(this.netPoint(x, y), T, h, () => {
-      this.ballState = 'free'; this.world.shake(.14); this.ui.flash(false);
-      this.audio.net(); this.audio.cheer(1); this.world.setExcite(1, 2.5);
-      const speed = rt != null ? clamp(1 - rt / r.windowMs, 0, 1) : .5;
-      const pts = Math.round((250 + 150 * speed) * this.spec.mult * this.combo()); this.addScore(pts);
-      this.ui.center('GOAL!', 'gold'); this.ui.pop(`+${pts}`, 'gold');
-      this.ui.pop(input === 'C' ? '칩슛 골!' : '빈 곳으로 슛!', 'small'); if (rt != null) this.ui.pop(`슛 반응 ${rt}ms`, 'small');
-      this.mates.forEach(m => m.group.visible && m.celebrate());
-      this.after(2400, () => { this.levelUp(true); this.newAttack(); this.after(800, () => this.startRally()); });
-    });
-    this.after(T * 520, () => { this.slow = { t: 0, dur: .9 }; }); // 공이 골문에 가까워지면 느린 화면
+  shotGoal(r) {
+    const sh = r.shot;
+    this.ballState = 'free'; this.world.shake(.14); this.ui.flash(false);
+    this.stats.correct++; this.streak++; this.stats.rts.push(sh.rt); this.stats.goals++;
+    this.audio.net(); this.audio.cheer(1); this.world.setExcite(1, 2.5);
+    const speed = clamp(1 - sh.rt / r.windowMs, 0, 1), mult = this.spec.mult;
+    const wrongFoot = sh.lean && sh.lean === -sh.side, corner = Math.abs(sh.x) > 2.6;
+    const pts = Math.round(((250 + 150 * speed) + (wrongFoot ? 60 : 0) + (corner ? 40 : 0)) * mult * this.combo()); this.addScore(pts);
+    this.ui.setCombo(this.combo());
+    this.ui.center('GOAL!', 'gold'); this.ui.pop(`+${pts}`, 'gold');
+    this.ui.pop(sh.out === 'postIn' ? '골대 맞고 골!' : wrongFoot ? '역동작! 기운 반대로 골' : corner ? '구석으로 정확하게!' : '골!', 'small gold');
+    this.mates.forEach(m => m.group.visible && m.celebrate());
+    this.after(2400, () => this.afterShot(true));
   }
-  shotMiss(r, input) {
+  shotMiss(r) {
+    const sh = r.shot;
+    const why = sh.out === 'over' ? '너무 세게 찼어요 · 크로스바 위로' : sh.out === 'wide' ? '골대 밖으로 나갔어요 · 조금 더 안쪽으로'
+      : sh.out === 'post' ? '골대를 맞았어요! 아깝다'
+      : sh.lean && sh.lean === sh.side ? '골키퍼가 기운 쪽으로 찼어요 · 반대로!'
+      : sh.p < .45 ? '너무 약해요 · 더 빠르게 쓸어요'
+      : Math.abs(sh.x) < 1.8 ? '골키퍼 정면이에요 · 구석으로!' : '골키퍼가 막았어요 · 기울 때 반대 구석으로';
+    this.audio.groan(); this.audio.bad();
+    this.ui.center(sh.out === 'save' ? 'SAVE' : 'MISS', 'bad'); this.ui.pop(why, 'small bad');
+    this.after(1300, () => this.afterShot(false));
+  }
+  shotTimeout(r) { // 시간 초과: 골키퍼가 달려 나와 공을 덮친다
     const k = this.keeper, me = this.me;
-    let why;
-    const done = () => {
-      this.audio.groan(); this.audio.bad(); this.ui.center(input ? 'SAVE' : 'MISS', 'bad'); this.ui.pop(why, 'small bad');
-      this.after(1300, () => {
-        this.lives--; this.ui.setLives(this.lives, this.M.lives);
-        if (this.lives <= 0) return this.endRun();
-        this.newAttack(); this.after(800, () => this.startRally());
-      });
-    };
-    const rebound = (s) => this.ballFly(new THREE.Vector3(s * rnd(6, 9), .11, k.pos.z + rnd(1, 4)), .9, .8, () => { this.ballState = 'free'; });
-    if (!input) { // 시간 초과: 골키퍼가 공을 덮친다
-      why = '슛 타이밍을 놓쳤어요';
-      if (r.tell === 'side') {
-        k.anim = null; k.moveTo(me.x, me.z - 1.5, 6.5);
-        const d = Math.abs(me.z - 1.5 - k.pos.z);
-        this.after(Math.min(1300, d / 6.5 * 1000 + 250), () => { k.tackle(0, .4, 1.4); this.ballHold(k); this.audio.touch(); this.after(500, done); });
-      } else {
-        const to = k.pos.clone(); to.y = .11; to.z += .5;
-        this.ballFly(to, .4, .02, () => { this.ballHold(k); this.audio.touch(); done(); });
-      }
-    } else if (r.tell === 'rush' && input !== 'C') { // 뛰어나와 크게 막아선 골키퍼 몸에 막힘
-      why = '골키퍼가 뛰어나오면 가운데 칩슛!';
-      const s = input === 'L' ? -1 : 1;
-      this.ballFly(new THREE.Vector3(k.pos.x + s * .55, .45, k.pos.z + .3), .26, .02, () => { this.audio.touch(1); this.world.shake(.05); rebound(s); done(); });
-    } else if (input === 'C') { // 서 있는 골키퍼에게 칩슛 → 뛰어올라 잡음
-      why = '골키퍼가 서 있으면 칩슛은 잡혀요';
-      const T = .85; this.after((T - .25) * 1000, () => k.catchHigh(0));
-      this.ballFly(new THREE.Vector3(0, 2.25, k.pos.z + .3), T, .9, () => { this.ballHold(k, true); this.audio.touch(.8); done(); });
-    } else { // 골키퍼가 쏠린 쪽으로 슛 → 다이빙 선방
-      why = '골키퍼가 움직인 쪽이에요 · 반대로!';
-      const s = input === 'L' ? -1 : 1, dist = clamp(Math.abs(s * 2.7 - k.pos.x), .5, 2.2);
-      k.dive(s, dist);
-      this.ballFly(new THREE.Vector3(k.pos.x + s * dist, .9, k.pos.z + .3), .42, .1, () => { this.audio.touch(1); rebound(s); done(); });
+    k.anim = null; k.moveTo(me.x, me.z - 1.5, 6.5);
+    const d = Math.abs(me.z - 1.5 - k.pos.z);
+    this.after(Math.min(1300, d / 6.5 * 1000 + 250), () => {
+      k.tackle(0, .4, 1.4); this.ballHold(k); this.audio.touch();
+      this.audio.groan(); this.ui.center('MISS', 'bad'); this.ui.pop('슛 타이밍을 놓쳤어요', 'small bad');
+      this.after(1300, () => this.afterShot(false));
+    });
+  }
+  afterShot(goal) {
+    if (this.phase === 'over') return;
+    if (this.mode === 'challenge') {
+      if (goal) { this.levelUp(true); this.newAttack(); return this.after(800, () => this.startRally()); }
+      this.lives--; this.ui.setLives(this.lives, this.M.lives);
+      if (this.lives <= 0) return this.endRun();
+      this.newAttack(); return this.after(800, () => this.startRally());
     }
+    // 훈련장 '1:1 슛': 10번, 3골마다 레벨 업(골키퍼가 빨라진다)
+    if (goal && this.stats.goals % 3 === 0) this.levelUp(true);
+    if (this.count >= this.M.total) return this.endRun();
+    this.newAttack(); this.after(700, () => this.startRally());
   }
 
   // ---------- 음성 콜 ----------
@@ -759,7 +837,7 @@ export class Game {
     else if (this.phase === 'shotResolve') target = 0.15;
     else if (this.mode === 'mot') target = 0.6;
     else if (this.phase === 'countdown' || this.phase === 'turnover' || this.phase === 'over') target = 0.6;
-    if (this.mode !== 'challenge' && this.me.z < SHOT_Z + 8) target = Math.min(target, 1);
+    if (this.mode !== 'challenge' && this.me.z < SHOT_Z + 8 && !this.swipeMode()) target = Math.min(target, 1); // 훈련장 패스 연습은 골대 앞에서 천천히 (슛 장면은 제외)
     if (this.burst > 0) { target += 3.5 * this.burst; this.burst = Math.max(0, this.burst - dt * 1.2); } // 돌파 순간 가속
     target *= feet;
     me.v += (target - me.v) * Math.min(1, dt * 2.5);
@@ -790,6 +868,7 @@ export class Game {
 
     // 둘러보기 패스: 무엇을 언제 봤는지 기록하고, 수비 위치를 잡는다
     if (r && r.kind === 'scan' && r.scan) this.scanUpdate(r);
+    if (r && r.kind === 'shot' && this.phase === 'shotDecide') this.keeperUpdate(r);
 
     // 동료·수비 이동
     for (const m of this.mates) {

@@ -243,6 +243,11 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .hint{position:absolute;bottom:calc(var(--sb) + 18px);left:max(10px,var(--sl));right:max(10px,var(--sr));display:grid;grid-template-columns:1fr 1fr;gap:6px;
   font:700 13px/1 var(--body);color:rgba(244,246,251,.85)}
 .hint.z3{grid-template-columns:35fr 30fr 35fr}
+.hint.z1{grid-template-columns:1fr}
+.hint.z1 span{justify-content:center;color:var(--sun);text-align:center}
+.swipe-trail{position:absolute;height:6px;margin-top:-3px;transform-origin:0 50%;border-radius:3px;pointer-events:none;z-index:2;
+  background:linear-gradient(90deg,rgba(255,201,60,0),rgba(255,201,60,.95));animation:trailFade .5s ease-out forwards}
+@keyframes trailFade{to{opacity:0}}
 .hint span{display:flex;align-items:center;gap:6px;padding:12px 10px;background:rgba(11,20,40,.55);justify-content:center;border-top:2px solid rgba(244,246,251,.18);transition:background .3s,color .3s}
 .hint span:first-child{justify-content:flex-start}
 .hint span:last-child{justify-content:flex-end}
