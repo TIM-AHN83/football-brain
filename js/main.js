@@ -225,32 +225,50 @@ function endSession() { gestures.enabled = false; voice.stop(); audio.setDuck(fa
 // ---------- 결과 ----------
 function onEnd(sum) {
   endSession(); lastSummary = sum; state = 'result';
-  const newBest = addHistory(sum);
+  lastBest = addHistory(sum);
   ui.renderResult(sum); ui.go('scr-result');
-  $('#btn-submit').hidden = !sum.ranked; $('#btn-submit').disabled = false;
-  $('#submit-msg').textContent = sum.ranked ? (newBest ? '내 최고 기록! 랭킹에 올려 보세요.' : '') + (getClub() ? '' : ' 클럽에 들어가면 판마다 팀 점수가 자동으로 쌓여요.') : '훈련장 기록은 랭킹에 들어가지 않아요.';
+  $('#btn-submit').hidden = true; $('#btn-submit').disabled = false;
+  $('#submit-msg').textContent = sum.ranked ? '' : '훈련장 기록은 랭킹에 들어가지 않아요.';
+  renderResRank(null);
   $('#scr-result').scrollTop = 0;
-  if (sum.ranked && getClub() && !PREVIEW) submitScore(true); // 클럽 회원은 판마다 자동 등록 → 팀 점수
+  if (sum.ranked) submitScore(); // 챌린지 기록은 개인 랭킹에 자동 등록 (클럽 회원이면 팀 점수에도 같이)
+}
+// 결과 화면의 개인 랭킹 · 팀 랭킹 두 칸 (누르면 그 랭킹을 연다)
+let lastBest = false;
+const escH = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function renderResRank(o) {
+  const el = $('#res-rank'); el.hidden = !o; if (!o) return;
+  const c = getClub(), fmt = (n) => Number(n || 0).toLocaleString('ko-KR');
+  const solo = o.sending ? '<b>…</b><small>올리는 중</small>'
+    : o.res ? `<b>${o.res.rank_week}위</b><small>이번 주 · 전체 ${o.res.rank_all}위${o.best ? ' · 내 최고 기록!' : ''}</small>`
+    : `<b>–</b><small>${escH(o.err || '')}</small>`;
+  const team = !c ? '<b>클럽 가입</b><small>판마다 팀 점수도 같이 쌓여요</small>'
+    : o.sending ? `<b>…</b><small>${escH(c.name)}</small>`
+    : o.res && o.res.club ? `<b>${o.res.club_rank ?? '–'}위</b><small>${escH(c.name)} · 이번 주 팀 점수 ${fmt(o.res.club_points)}</small>`
+    : `<b>–</b><small>${escH(c.name)}</small>`;
+  el.innerHTML = `<button type="button" class="rr" data-k="solo"><span class="rr-k">개인 랭킹</span>${solo}</button>`
+    + `<button type="button" class="rr team" data-k="team"><span class="rr-k">팀 랭킹</span>${team}</button>`;
+  el.querySelectorAll('.rr').forEach(b => b.addEventListener('click', () => { if (b.dataset.k === 'team' && !getClub()) club.open(); else openRanking(b.dataset.k); }));
 }
 const SUBMIT_MSG = { not_ready: '온라인 랭킹을 준비하고 있어요. 기록은 이 기기에 저장했어요.', network: '인터넷 연결을 확인하고 다시 눌러 주세요.', code: '챌린지 코드가 맞지 않아요. 인스타 DM으로 받은 코드를 넣어 주세요.',
   rate: '조금 뒤에 다시 등록해 주세요.', implausible: '기록을 확인할 수 없어요.', word: '닉네임에 쓸 수 없는 말이 있어요. 선수 등록에서 바꿔 주세요.', nick: '닉네임을 확인해 주세요.' };
-async function submitScore(auto = false) {
+async function submitScore() {
   const p = getProfile(), s = lastSummary; if (!p || !s) return;
-  if (PREVIEW) { $('#submit-msg').textContent = '미리보기 링크에서는 온라인 랭킹이 꺼져 있어요. 기록은 이 기기에 저장했어요.'; return; }
-  const btn = $('#btn-submit'); btn.disabled = true; if (auto) btn.hidden = true;
-  $('#submit-msg').textContent = auto ? '팀 점수에 올리는 중…' : '등록하는 중…';
+  if (PREVIEW) { renderResRank({ err: '미리보기에선 꺼짐' }); $('#submit-msg').textContent = '미리보기 링크에서는 온라인 랭킹이 꺼져 있어요. 기록은 이 기기에 저장했어요.'; return; }
+  const btn = $('#btn-submit'); btn.disabled = true; btn.hidden = true;
+  $('#submit-msg').textContent = ''; renderResRank({ sending: true });
   const res = await Board.submit({ nick: p.nick, team: p.team || null, age: p.age, score: s.score, level: s.level, accuracy: s.accuracy, avg_rt: Math.min(9999, s.avgRt),
     calls: s.calls, goals: s.goals, brain_index: s.brainIndex, device: deviceId(), code: store.get('code', ''), club: getClub()?.code || '' });
   if (res.ok) {
-    const clubLine = club.afterSubmit(res);
-    $('#submit-msg').textContent = (clubLine ? clubLine + ' · ' : '등록 완료! ') + `개인 이번 주 ${res.rank_week}위 · 전체 ${res.rank_all}위`;
-    ui.toast(clubLine || `이번 주 ${res.rank_week}위!`, 3000); btn.hidden = true;
+    club.afterSubmit(res); renderResRank({ res, best: lastBest });
+    ui.toast(res.club ? `개인 이번 주 ${res.rank_week}위 · 팀 ${res.club_rank ?? '–'}위` : `개인 이번 주 ${res.rank_week}위!`, 3000);
   } else {
+    renderResRank({ err: '아직 못 올렸어요' });
     btn.hidden = false; btn.disabled = res.error === 'not_ready' || res.error === 'implausible';
     $('#submit-msg').textContent = SUBMIT_MSG[res.error] || '등록하지 못했어요.';
   }
 }
-$('#btn-submit').addEventListener('click', () => submitScore(false));
+$('#btn-submit').addEventListener('click', () => submitScore());
 $('#btn-again').addEventListener('click', () => { showTitle(); openSetup(lastMode, setupLevel); });
 $('#btn-home').addEventListener('click', showTitle);
 $('#btn-share').addEventListener('click', async () => {
@@ -278,21 +296,29 @@ $('#btn-howto').addEventListener('click', () => ui.open('scr-howto'));
 $('#btn-info').addEventListener('click', () => ui.open('scr-info'));
 
 // ---------- 랭킹 ----------
-let rPeriod = 'week', rAge = 'all';
+// 개인 랭킹(한 사람당 최고 기록 1개)과 팀 랭킹(클럽 팀 점수)을 나눠서 보여 준다. 챌린지 한 판은 둘 다에 들어간다.
+let rKind = 'solo', rPeriod = 'week', rAge = 'all';
 const pSeg = seg('seg-period', rPeriod, v => { rPeriod = v; loadRanking(); });
+const kSeg = seg('seg-kind', rKind, v => { rKind = v; if (rKind === 'team' && rPeriod === 'me') { rPeriod = 'week'; pSeg.set('week'); } loadRanking(); });
 seg('seg-rage', rAge, v => { rAge = v; loadRanking(); });
-$('#btn-ranking').addEventListener('click', () => openRanking());
-function openRanking(tab) { if (tab) { rPeriod = tab; pSeg.set(tab); } ui.open('scr-ranking'); loadRanking(); }
+$('#btn-ranking').addEventListener('click', () => openRanking('solo', 'week'));
+function openRanking(kind = 'solo', period = 'week') {
+  rKind = kind === 'team' ? 'team' : 'solo'; rPeriod = period; kSeg.set(rKind); pSeg.set(rPeriod);
+  ui.open('scr-ranking'); loadRanking();
+}
 async function loadRanking() {
   const note = $('#rank-note'), me = getProfile()?.nick;
-  $('#seg-rage').hidden = rPeriod === 'me' || rPeriod === 'club';
-  if (rPeriod === 'club') { // 클럽 대항전 순위 (이번 주 팀 점수)
+  $('#seg-period [data-v="me"]').hidden = rKind === 'team';
+  $('#seg-rage').hidden = rKind === 'team' || rPeriod === 'me';
+  if (rKind === 'team') { // 팀 랭킹 (클럽 대항전)
     if (PREVIEW) { note.textContent = '미리보기 링크에서는 클럽 대항전이 꺼져 있어요.'; ui.renderRanking([], null, '정식 주소에서 열려요.'); return; }
     note.textContent = '불러오는 중…';
-    const res = await Board.clubTop('week');
-    if (rPeriod !== 'club') return;
-    if (res.ok) { note.textContent = '팀 점수 = 이번 주 팀원 챌린지 점수 합 (한 사람당 하루 5판). 월요일 0시에 새로 시작, 1~3위는 트로피!'; renderClubRanking($('#rank-list'), res.rows, getClub()?.id); }
-    else { note.textContent = res.error === 'not_ready' ? '클럽 대항전을 준비하고 있어요.' : '인터넷 연결을 확인해 주세요.'; ui.renderRanking([], null, '클럽 순위를 불러오지 못했어요.'); }
+    const period = rPeriod, res = await Board.clubTop(period);
+    if (rKind !== 'team' || period !== rPeriod) return; // 그사이 다른 탭을 눌렀으면 버린다
+    if (res.ok) {
+      note.textContent = period === 'week' ? '팀 점수 = 이번 주 팀원 챌린지 점수 합 (한 사람당 하루 5판). 월요일 0시에 새로 시작, 1~3위는 트로피!' : '지금까지 쌓인 팀 점수 합과 받은 트로피.';
+      renderClubRanking($('#rank-list'), res.rows, getClub()?.id, period);
+    } else { note.textContent = res.error === 'not_ready' ? '클럽 대항전을 준비하고 있어요.' : '인터넷 연결을 확인해 주세요.'; ui.renderRanking([], null, '팀 랭킹을 불러오지 못했어요.'); }
     return;
   }
   if (rPeriod === 'me') {
@@ -305,8 +331,8 @@ async function loadRanking() {
   note.textContent = '불러오는 중…';
   const period = rPeriod, age = rAge;
   const res = await Board.top(period, age);
-  if (period !== rPeriod || age !== rAge) return; // 그사이 다른 탭을 눌렀으면 늦게 온 결과는 버린다
-  if (res.ok) { note.textContent = rPeriod === 'week' ? '매주 월요일 0시(한국 시간)에 새로 시작해요. 한 사람당 최고 기록 1개.' : '역대 최고 기록. 한 사람당 1개.'; ui.renderRanking(res.rows, me); }
+  if (rKind !== 'solo' || period !== rPeriod || age !== rAge) return; // 그사이 다른 탭을 눌렀으면 늦게 온 결과는 버린다
+  if (res.ok) { note.textContent = rPeriod === 'week' ? '챌린지가 끝나면 자동으로 올라가요. 매주 월요일 0시(한국 시간)에 새로 시작, 한 사람당 최고 기록 1개.' : '역대 최고 기록. 한 사람당 1개.'; ui.renderRanking(res.rows, me); }
   else { note.textContent = res.error === 'not_ready' ? '온라인 랭킹을 준비하고 있어요. 지금은 "내 기록"만 볼 수 있어요.' : '인터넷 연결을 확인해 주세요.'; ui.renderRanking([], null, '랭킹을 불러오지 못했어요.'); }
 }
 void pSeg;
@@ -377,7 +403,7 @@ async function demo(which) {
     if (which === 'play') { game.level = lv; game.newAttack(true); }
     gestures.enabled = true; state = 'play';
   } else if (['howto', 'drills', 'ranking', 'settings', 'setup', 'profile', 'info'].includes(which)) {
-    if (which === 'setup') openSetup('challenge'); else if (which === 'profile') openProfile(); else { ui.open('scr-' + which); if (which === 'ranking') loadRanking(); }
+    if (which === 'setup') openSetup('challenge'); else if (which === 'profile') openProfile(); else if (which === 'ranking') openRanking(params.get('kind') || 'solo'); else ui.open('scr-' + which);
   }
 }
 

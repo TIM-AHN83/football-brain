@@ -202,7 +202,8 @@
 <section id="scr-ranking" class="screen sheet-screen">
   <div class="sheet tall">
     <header class="sheet-head"><h2>랭킹</h2><button type="button" class="x-btn" data-close aria-label="닫기">✕</button></header>
-    <div class="seg" id="seg-period"><button type="button" data-v="week">이번 주</button><button type="button" data-v="all">전체</button><button type="button" data-v="me">내 기록</button><button type="button" data-v="club">클럽</button></div>
+    <div class="seg big" id="seg-kind"><button type="button" data-v="solo">개인 랭킹</button><button type="button" data-v="team">팀 랭킹</button></div>
+    <div class="seg" id="seg-period"><button type="button" data-v="week">이번 주</button><button type="button" data-v="all">전체</button><button type="button" data-v="me">내 기록</button></div>
     <div class="seg small" id="seg-rage"><button type="button" data-v="all">전체</button><button type="button" data-v="u8">U-8</button><button type="button" data-v="u10">U-10</button><button type="button" data-v="u12">U-12</button><button type="button" data-v="u15">U-15</button><button type="button" data-v="open">일반</button></div>
     <p id="rank-note" class="fine"></p>
     <ol id="rank-list" class="rank-list"></ol>
@@ -239,7 +240,7 @@
       <h3>무엇을 키우나요</h3>
       <p>좋은 선수는 공을 받기 전에 고개를 들어 주변을 살피고(스캐닝), 동료와 말로 소통하고(콜플레이), 순간적으로 판단해요. 이 게임은 그 세 가지를 짧고 반복적으로 연습하게 만든 훈련 도구예요.</p>
       <h3>개인정보</h3>
-      <p>랭킹에는 닉네임·나이대·팀 이름(선택)과 점수만 저장돼요. 음성은 휴대폰 브라우저의 음성 인식 기능으로 처리되고 게임 서버에는 저장하지 않아요. 만 14세 미만 어린이는 보호자와 함께 이용해 주세요.</p>
+      <p>챌린지가 끝나면 기록이 개인 랭킹에 자동으로 올라가요(클럽에 들어가 있으면 팀 점수에도). 랭킹에는 닉네임·나이대·팀 이름(선택)과 점수만 저장돼요. 음성은 휴대폰 브라우저의 음성 인식 기능으로 처리되고 게임 서버에는 저장하지 않아요. 만 14세 미만 어린이는 보호자와 함께 이용해 주세요.</p>
       <h3>소리 출처</h3>
       <p>관중 함성·휘슬·킥·효과음은 모두 게임 안에서 직접 합성한 소리예요(저작권 문제 없음).</p>
       <h3>그래픽 출처</h3>
@@ -309,7 +310,8 @@
       <p class="coach" id="res-coach"></p>
     </div>
     <div class="res-actions">
-      <button id="btn-submit" class="btn btn-primary"><span>랭킹 등록</span></button>
+      <div class="res-rank" id="res-rank" hidden></div>
+      <button id="btn-submit" class="btn btn-primary" hidden><span>다시 등록하기</span></button>
       <p id="submit-msg" class="fine center"></p>
       <div class="btn-row">
         <button id="btn-share" class="btn">결과 공유</button>

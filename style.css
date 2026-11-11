@@ -104,6 +104,13 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .seg{display:flex;gap:4px;flex-wrap:wrap}
 .seg button{flex:1 1 auto;min-width:52px;min-height:40px;border:1px solid var(--line);background:rgba(244,246,251,.05);font:700 14px var(--body);padding:0 8px}
 .seg button.on{background:var(--sun);color:var(--ink);border-color:var(--sun)}
+.seg.big button{min-height:46px;font-size:15px}
+.res-rank{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.rr{display:grid;gap:3px;align-content:start;text-align:left;padding:10px 12px;background:rgba(244,246,251,.05);border:1px solid var(--line);border-left:3px solid var(--sun);color:var(--chalk);font:inherit}
+.rr.team{border-left-color:var(--good)}
+.rr-k{font-size:11px;color:var(--mist);font-weight:700;letter-spacing:.04em}
+.rr b{font:800 22px/1.1 var(--num)}
+.rr small{font-size:11px;color:var(--mist);line-height:1.4;word-break:keep-all}
 .seg.small button{min-height:32px;font-size:12px;min-width:44px}
 .fine{margin:0;font-size:12px;color:var(--mist);line-height:1.5}
 .fine.center{text-align:center;min-height:18px}

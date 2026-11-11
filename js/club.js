@@ -92,7 +92,7 @@ export class ClubUI {
       <p class="fine">챌린지 한 판이 끝날 때마다 내 점수가 팀 점수로 자동으로 쌓여요 (한 사람당 하루 최고 5판). 매주 월요일 0시에 새로 시작하고, 지난주 1~3위 클럽은 트로피를 받아요. 👑 = 이번 주 팀 MVP.</p>
       <div class="btn-row"><button class="btn small" id="club-rank">클럽 순위 보기</button><button class="btn small" id="club-leave">클럽 나가기</button></div>`;
     $('#club-share').addEventListener('click', () => this.share(info));
-    $('#club-rank').addEventListener('click', () => { this.ui.close('scr-club'); this.openRanking('club'); });
+    $('#club-rank').addEventListener('click', () => { this.ui.close('scr-club'); this.openRanking('team'); });
     $('#club-leave').addEventListener('click', () => this.leave());
     $('#club-move')?.addEventListener('click', () => this.join(this.pending));
   }
@@ -113,7 +113,7 @@ export class ClubUI {
     $('#club-join').addEventListener('click', () => this.join($('#club-code').value));
     $('#club-create').addEventListener('click', () => this.create($('#club-name').value));
     $('#club-join-pend')?.addEventListener('click', () => this.join(pend));
-    $('#club-rank2').addEventListener('click', () => { this.ui.close('scr-club'); this.openRanking('club'); });
+    $('#club-rank2').addEventListener('click', () => { this.ui.close('scr-club'); this.openRanking('team'); });
     if (pend) Board.clubInfo(pend, deviceId()).then(i => { const el = $('#club-pend-name'); if (el && i?.ok) el.textContent = `${i.name} (${i.code})`; });
   }
   busy(on) { this.body.querySelectorAll('button').forEach(b => { b.disabled = on; }); }
@@ -163,14 +163,14 @@ export class ClubUI {
   }
 }
 
-// 랭킹 화면의 '클럽' 탭
-export function renderClubRanking(list, rows, myId) {
-  if (!rows || !rows.length) { list.innerHTML = '<li class="rank-empty" style="display:block">이번 주 아직 팀 점수가 없어요. 클럽을 만들고 첫 점수를 올려 보세요!</li>'; return; }
+// 랭킹 화면의 '팀 랭킹' (period: 'week' 이번 주 | 'all' 전체 기간)
+export function renderClubRanking(list, rows, myId, period = 'week') {
+  if (!rows || !rows.length) { list.innerHTML = `<li class="rank-empty" style="display:block">${period === 'week' ? '이번 주 아직 팀 점수가 없어요.' : '아직 팀 점수가 없어요.'} 클럽을 만들고 첫 점수를 올려 보세요!</li>`; return; }
   list.innerHTML = rows.map(r => {
     const tro = [r.gold && `🥇${r.gold}`, r.silver && `🥈${r.silver}`, r.bronze && `🥉${r.bronze}`].filter(Boolean).join(' ');
     return `<li class="${myId && Number(r.club_id) === Number(myId) ? 'me' : ''}">
       <span class="r">${r.rank}</span>
-      <span class="n"><b>${esc(r.name)}</b><small>이번 주 ${r.players}명 뛰었어요 · 회원 ${r.members}명${tro ? ' · ' + tro : ''}</small></span>
+      <span class="n"><b>${esc(r.name)}</b><small>${period === 'week' ? '이번 주 ' : ''}${r.players}명 뛰었어요 · 회원 ${r.members}명${tro ? ' · ' + tro : ''}</small></span>
       <span class="s">${fmt(r.points)}<small>팀 점수</small></span></li>`;
   }).join('');
 }
