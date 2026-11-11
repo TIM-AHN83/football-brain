@@ -338,9 +338,9 @@ async function demo(which) {
     document.body.appendChild(img);
   } else if (which === 'result') {
     onEnd({ mode: 'challenge', title: '챌린지', ranked: true, score: 18420, level: 6, accuracy: 82, avgRt: 612, decisions: 28, correct: 23, calls: 9, callChances: 14,
-      goals: 5, shots: 6, scans: 21, scanPerMin: 7.4, minFlash: 470, whistle: [2, 3], both: [3, 4], shoulder: [2, 3], unseen: 0, mot: [0, 0], steps: 380, stepsPerMin: 134,
+      goals: 5, shots: 6, scans: 21, scanPerMin: 7.4, minFlash: 470, whistle: [2, 3], both: [3, 4], scanRound: [4, 5], unseen: 0, mot: [0, 0], steps: 380, stepsPerMin: 134,
       duration: 170, axes: { judge: .82, speed: .81, vision: .71, call: .64, scan: .41, brake: .67 }, brainIndex: 74, voiceOn: true, feetOn: true });
-  } else if (which === 'play' || which === 'mot' || which === 'shoulder') {
+  } else if (which === 'play' || which === 'mot' || which === 'scan') {
     if (!getProfile()) setProfile({ nick: '미리보기', age: 'u10', team: '', num: 7 });
     ui.go('none'); game.endCinematic(); game.opts.voice = false;
     game.forceShot = params.has('shot'); game.forceTell = params.get('tell'); // 개발용: ?demo=play&shot&tell=rush|side

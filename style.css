@@ -229,6 +229,15 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .hint span:last-child{justify-content:flex-end}
 .hint span[data-z=C]{color:var(--sun)}
 .hint span.hit{background:rgba(255,201,60,.85);color:var(--ink);border-top-color:var(--sun);transition:none}
+.fx-blind{position:absolute;inset:0;pointer-events:none;display:grid;place-content:center;justify-items:center;gap:10px;text-align:center;padding:0 24px;
+  background:radial-gradient(circle at 50% 70%,rgba(22,38,74,.94),rgba(5,10,20,.985) 65%);opacity:0;transition:opacity .25s}
+.fx-blind.on{opacity:1;transition:opacity .06s}
+.fx-blind.cut>*{visibility:hidden}
+.fx-blind b{font:400 34px/1.1 var(--display);color:var(--sun);letter-spacing:.04em}
+.fx-blind small{font:700 15px/1.45 var(--body);color:var(--mist)}
+.scan-map{position:absolute;left:50%;top:calc(var(--st) + 64px);width:224px;height:215px;transform:translateX(-50%) scale(.96);pointer-events:none;opacity:0;transition:opacity .2s,transform .2s;
+  box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.scan-map.show{opacity:1;transform:translateX(-50%)}
 .fx-zone{position:absolute;top:0;bottom:0;pointer-events:none;background:linear-gradient(0deg,rgba(255,201,60,.26),rgba(255,201,60,0) 55%);opacity:0;transition:opacity .35s}
 .fx-zone.on{opacity:1;transition:none}
 .hud.dim .hint{opacity:.35}

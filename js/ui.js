@@ -9,7 +9,7 @@ const TIPS = {
   speed: '보자마자 손가락이 나가도록! "플래시 패스"를 하루 3판, 반응 시간이 줄어드는 걸 확인해요.',
   vision: '화면 가운데만 보지 말고 양쪽 친구를 동시에 시야에 두어요. 멀리 작게 보이는 수비수도 놓치지 않기.',
   call: '패스할 때 "7번 패스!"처럼 번호와 함께 크게 외쳐요. 실제 경기에서도 동료가 먼저 움직일 수 있어요.',
-  scan: '공 받기 전에 폰(고개)을 좌우로 한 번씩 돌려 봐요. 잘하는 선수는 공 받기 전 10초 동안 5~8번 주변을 살펴요.',
+  scan: '공 받기 전에 폰(고개)을 양옆으로 돌려 친구와 수비를 확인하고, 받기 직전에 한 번 더 봐요. 훈련장 "둘러보기 패스"로 연습!',
   brake: '휘슬이 울리면 손을 멈춰요. 급할 때 한 번 멈추는 힘이 실수를 줄여 줘요.',
 };
 export function grade(bi) { return bi >= 90 ? '월드클래스' : bi >= 75 ? '국가대표' : bi >= 60 ? '주전' : bi >= 40 ? '유망주' : '루키'; }
@@ -19,7 +19,7 @@ export class UI {
     this.el = {
       hud: $('#hud'), score: $('#hud-score'), level: $('#hud-level'), combo: $('#hud-combo'), lives: $('#hud-lives'), attack: $('#hud-attack'),
       callout: $('#hud-callout'), center: $('#hud-center'), pop: $('#hud-pop'), voice: $('#hud-voice'), timer: $('#hud-timer'), timerBar: $('#hud-timer i'),
-      hint: $('#hud-hint'), zone: $('#fx-zone'), feet: $('#m-feet'), mic: $('#m-mic'), mot: $('#mot-choices'), edgeL: $('#fx-edge-l'), edgeR: $('#fx-edge-r'), flash: $('#fx-flash'), toast: $('#toast'),
+      hint: $('#hud-hint'), zone: $('#fx-zone'), blind: $('#fx-blind'), map: $('#scan-map'), feet: $('#m-feet'), mic: $('#m-mic'), mot: $('#mot-choices'), edgeL: $('#fx-edge-l'), edgeR: $('#fx-edge-r'), flash: $('#fx-flash'), toast: $('#toast'),
     };
     this._feet = -1;
   }
@@ -87,6 +87,62 @@ export class UI {
     f.style.left = a + '%'; f.style.width = (b - a) + '%';
     f.classList.remove('on'); void f.offsetWidth; f.classList.add('on');
   }
+  // 둘러보기 패스: 공을 받는 순간 화면 가리기
+  blind(on) {
+    const b = this.el.blind; if (!b) return;
+    clearTimeout(this._cut1); clearTimeout(this._cut2); b.classList.remove('cut'); // 장면 넘기기 중이었다면 그만
+    b.classList.toggle('on', !!on);
+  }
+  cut() { // 장면 넘기기: 0.1초 어두워졌다 밝아진다
+    const b = this.el.blind; if (!b) return;
+    clearTimeout(this._cut1); clearTimeout(this._cut2);
+    b.classList.add('on', 'cut');
+    this._cut1 = setTimeout(() => b.classList.remove('on'), 110); this._cut2 = setTimeout(() => b.classList.remove('cut'), 500);
+  }
+  // 정답 미니맵 (위에서 본 그림): 나·친구·수비 자리, 내가 둘러본 범위, 내 패스
+  scanMap(m, ms = 2200) {
+    const cv = this.el.map; if (!cv) return;
+    const g = cv.getContext('2d'), sc = cv.width / 240;
+    g.setTransform(sc, 0, 0, sc, 0, 0); g.clearRect(0, 0, 240, 230);
+    g.fillStyle = 'rgba(11,20,40,.93)'; g.beginPath(); g.roundRect ? g.roundRect(1, 1, 238, 228, 10) : g.rect(1, 1, 238, 228); g.fill();
+    g.strokeStyle = m.ok ? 'rgba(61,220,132,.8)' : 'rgba(255,77,58,.8)'; g.lineWidth = 2; g.stroke();
+    const cx = 120, cy = 140, k = 6.4, P = (x, z) => [cx + x * k, cy + z * k]; // z 가 음수 = 앞(위쪽)
+    // 내가 본 범위: 둘러본 방향(가장 왼쪽~가장 오른쪽) + 화면 폭
+    const a0 = m.yawMin - m.hHalf, a1 = m.yawMax + m.hHalf, R = 100;
+    g.beginPath(); g.moveTo(cx, cy);
+    for (let i = 0; i <= 48; i++) { const b = a0 + (a1 - a0) * i / 48; g.lineTo(cx - Math.sin(b) * R, cy - Math.cos(b) * R); }
+    g.closePath(); g.fillStyle = 'rgba(255,201,60,.17)'; g.fill(); g.strokeStyle = 'rgba(255,201,60,.5)'; g.lineWidth = 1; g.stroke();
+    const dot = (x, y, r, fill) => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fillStyle = fill; g.fill(); };
+    // 내 패스
+    if (m.pass) {
+      const [tx, ty] = P(m.pass.x, m.pass.z), ang = Math.atan2(ty - cy, tx - cx), col = m.ok ? '#3ddc84' : '#ff4d3a';
+      const ex = tx - Math.cos(ang) * 13, ey = ty - Math.sin(ang) * 13;
+      g.strokeStyle = col; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy); g.lineTo(ex, ey); g.stroke();
+      g.beginPath(); g.moveTo(ex + Math.cos(ang) * 6, ey + Math.sin(ang) * 6);
+      g.lineTo(ex - Math.cos(ang - .5) * 9, ey - Math.sin(ang - .5) * 9); g.lineTo(ex - Math.cos(ang + .5) * 9, ey - Math.sin(ang + .5) * 9);
+      g.closePath(); g.fillStyle = col; g.fill();
+    }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (const t of m.mates) {
+      const [x, y] = P(t.x, t.z);
+      if (t.free) { g.beginPath(); g.arc(x, y, 14, 0, Math.PI * 2); g.strokeStyle = '#3ddc84'; g.lineWidth = 2; g.stroke(); }
+      dot(x, y, 10, '#ffc93c'); g.fillStyle = '#0b1428'; g.font = '800 12px "Barlow Condensed",sans-serif'; g.fillText(t.num, x, y + 1);
+    }
+    // 수비는 친구 위에 그린다 (붙어 있는 수비가 친구 원에 가려지지 않게)
+    for (const d of m.defs) {
+      let [x, y] = P(d.x, d.z);
+      for (const t of m.mates) { // 친구 원에 겹치면 원 가장자리로 밀어 등번호가 보이게
+        const [tx, ty] = P(t.x, t.z), dx = x - tx, dy = y - ty, l = Math.hypot(dx, dy);
+        if (l < 17) { const ux = l > .1 ? dx / l : (cx - tx) / (Math.hypot(cx - tx, cy - ty) || 1), uy = l > .1 ? dy / l : (cy - ty) / (Math.hypot(cx - tx, cy - ty) || 1); x = tx + ux * 17; y = ty + uy * 17; }
+      }
+      dot(x, y, 8, '#f4f6fb'); dot(x, y, 6.5, d.tight ? '#ff4d3a' : 'rgba(255,77,58,.6)');
+    }
+    dot(cx, cy, 6, '#f4f6fb'); g.beginPath(); g.moveTo(cx, cy - 12); g.lineTo(cx - 4, cy - 6); g.lineTo(cx + 4, cy - 6); g.closePath(); g.fill();
+    g.textAlign = 'left'; g.textBaseline = 'alphabetic';
+    g.fillStyle = m.ok ? '#3ddc84' : '#ff4d3a'; g.font = '700 14px "Noto Sans KR",sans-serif'; g.fillText(m.title || '', 12, 24);
+    g.fillStyle = '#a9b6d3'; g.font = '700 11px "Noto Sans KR",sans-serif'; g.fillText('노란 부채꼴 = 내가 둘러본 범위', 12, 218);
+    cv.classList.add('show'); clearTimeout(this._map); this._map = setTimeout(() => cv.classList.remove('show'), ms);
+  }
   motChoices(nums, cb) {
     const m = this.el.mot; m.hidden = false;
     m.innerHTML = nums.map(n => `<button type="button" data-n="${n}">${n}</button>`).join('');
@@ -135,7 +191,9 @@ export class UI {
       [s.mode === 'mot' ? '등번호 기억' : '최단 플래시', s.mode === 'mot' ? `${s.mot[0]}<small>/${s.mot[1]}</small>` : (s.minFlash ? `${s.minFlash}<small>ms</small>` : '–')],
       ['콜 성공', s.voiceOn ? `${s.calls}<small>/${s.callChances}</small>` : '<small>꺼짐</small>'],
       ['스캔', `${s.scanPerMin}<small>/분</small>`],
-      [s.mode === 'challenge' ? '골' : '멈춤 성공', s.mode === 'challenge' ? `${s.goals}<small>/${s.shots}</small>` : (s.whistle[1] ? `${s.whistle[0]}<small>/${s.whistle[1]}</small>` : '–')],
+      s.mode === 'challenge' ? ['골', `${s.goals}<small>/${s.shots}</small>`]
+        : s.mode === 'scan' ? ['둘러보기 패스', `${s.scanRound[0]}<small>/${s.scanRound[1]}</small>`]
+        : ['멈춤 성공', s.whistle[1] ? `${s.whistle[0]}<small>/${s.whistle[1]}</small>` : '–'],
       ['발 움직임', s.feetOn ? `${s.stepsPerMin}<small>걸음/분</small>` : '<small>꺼짐</small>'],
     ];
     $('#res-stats').innerHTML = cells.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');

@@ -29,15 +29,16 @@ export function levelSpec(L) {
     tod: L <= 3 ? 'day' : L <= 6 ? 'dusk' : 'night',
     mult: 1 + 0.15 * (L - 1),
     build: L <= 2 ? [1500, 2300] : [1000, 1900],
-    types: L <= 2 ? { pass: 1 } : L === 3 ? { pass: .75, both: .25 } : L === 4 ? { pass: .65, both: .15, shoulder: .2 }
-      : L === 5 ? { pass: .55, both: .15, shoulder: .15, whistle: .15 } : { pass: .5, both: .15, shoulder: .2, whistle: .15 },
+    // LV2 둘러보기 패스, LV3 돌파, LV4 둘러보는 중 수비 이동, LV5 휘슬 — 레벨마다 새 규칙 하나
+    types: L === 1 ? { pass: 1 } : L === 2 ? { pass: .6, scan: .4 } : L === 3 ? { pass: .5, both: .25, scan: .25 }
+      : L === 4 ? { pass: .45, both: .15, scan: .4 } : L === 5 ? { pass: .4, both: .15, scan: .3, whistle: .15 } : { pass: .35, both: .15, scan: .35, whistle: .15 },
   };
 }
 
 export const MODES = {
   challenge: { title: '챌린지', ranked: true, lives: 3, shots: true },
   flash:     { title: '플래시 패스', lives: 0, total: 12, types: { pass: 1 } },
-  shoulder:  { title: '어깨 체크 360', lives: 0, total: 10, types: { shoulder: 1 } },
+  scan:      { title: '둘러보기 패스', lives: 0, total: 10, types: { scan: 1 } },
   brake:     { title: '판단 브레이크', lives: 0, total: 14, types: { pass: .4, both: .3, whistle: .3 } },
   mot:       { title: '등번호 추적', lives: 0, total: 8 },
 };
@@ -75,7 +76,7 @@ export class Game {
     this.timers = []; this.clock = 0; this.paused = false;
     this.level = level; this.score = 0; this.streak = 0; this.lives = this.M.lives; this.count = 0;
     this.stats = { decisions: 0, correct: 0, rts: [], minFlash: null, scans: 0, calls: 0, callChances: 0, goals: 0, shots: 0,
-      whistleTotal: 0, whistleOk: 0, bothTotal: 0, bothOk: 0, shoulderTotal: 0, shoulderOk: 0, unseen: 0,
+      whistleTotal: 0, whistleOk: 0, bothTotal: 0, bothOk: 0, scanTotal: 0, scanOk: 0, scanBoth: 0, unseen: 0,
       motTotal: 0, motOk: 0, stepsStart: this.sensors.steps, startLevel: level };
     this.taughtBoth = false; this.slow = null; this.burst = 0;
     this.ui.hud(true, mode);
@@ -97,7 +98,7 @@ export class Game {
     const S = levelSpec(this.level);
     this.spec = S; this.rallyIdx = 0; this.attackSize = this.M.shots ? S.rallies : 0;
     this.world.setTimeOfDay(this.mode === 'challenge' ? S.tod : (this.level <= 4 ? 'day' : this.level <= 8 ? 'dusk' : 'night'));
-    this.me.x = 0; this.me.z = START_Z; this.me.side = 0; this.me.sideT = 0; this.burst = 0;
+    this.me.x = 0; this.me.z = START_Z; this.me.side = 0; this.me.sideT = 0; this.burst = 0; this.ui.blind(false);
     this.world.rig.position.set(0, 0, START_Z); this.world.setZoom(1, true);
     const nums = shuffle(NUMS).slice(0, 2);
     this.mates.forEach((m, i) => {
@@ -131,11 +132,13 @@ export class Game {
     let kind = weighted(types);
     // 챌린지에서 돌파를 처음 만나는 판(LV3)엔 두 번째 랠리에서 꼭 한 번 나오게 한다
     if (types.both && this.mode === 'challenge' && !this.stats.bothTotal && this.rallyIdx >= 1) kind = 'both';
+    // 둘러보기 패스를 처음 만나는 판(LV2)엔 첫 랠리에 꼭 나오게 한다
+    if (types.scan && this.mode === 'challenge' && !this.stats.scanTotal && this.rallyIdx === 0) kind = 'scan';
     const side = Math.random() < .5 ? -1 : 1;
-    const r = { kind, side, flashMs: S.flashMs, windowMs: S.decisionMs, scanned: false, seen: kind !== 'shoulder', voiceOpen: true };
+    const r = { kind, side, flashMs: S.flashMs, windowMs: S.decisionMs, scanned: false, voiceOpen: true };
     if (kind === 'pass') r.answer = side < 0 ? 'R' : 'L';
     else if (kind === 'both') r.answer = 'C';
-    else if (kind === 'shoulder') { r.answer = side < 0 ? 'R' : 'L'; r.windowMs = S.decisionMs + 1700; }
+    else if (kind === 'scan') r.windowMs = this.scanSpec().decideMs; // 정답은 scanStart 에서 정한다
     else if (kind === 'whistle') { r.answer = 'none'; r.windowMs = Math.round(S.decisionMs * .85); }
     return r;
   }
@@ -147,15 +150,14 @@ export class Game {
     if (this.M.shots) this.ui.attack(this.attackSize, this.rallyIdx);
     if (S.badges === 'always') this.showBadges(0);
     else if (S.badges === 'rally') this.showBadges(1300);
+    if (this.forceShot && this.M.shots) { this.me.z = Math.min(this.me.z, SHOT_Z + 3); return this.shotRun(); } // 개발용 ?shot
+    if (r.kind === 'scan') return this.scanStart(r);
     // 등번호 섞기 (레벨 7+): 배지가 꺼진 뒤 두 친구가 X자로 엇갈려 뛴다
     if (S.shuffle && Math.random() < .5) this.after(1000, () => { const [a, b] = this.mates; [a.rel, b.rel] = [b.rel, a.rel]; });
-    if (this.forceShot && this.M.shots) { this.me.z = Math.min(this.me.z, SHOT_Z + 3); return this.shotRun(); } // 개발용 ?shot
     // 압박 수비 위치
-    if (r.kind !== 'shoulder') {
-      const p = this.presser; p.setVisible(true);
-      if (p.pos.z > this.me.z - 6 || Math.abs(p.pos.x - this.me.x) > 3) p.place(this.me.x + rnd(-.3, .3), this.me.z - 12, this.me.x, this.me.z);
-      p.maxSpeed = 2.5;
-    } else this.presser.setVisible(false);
+    const p = this.presser; p.setVisible(true);
+    if (p.pos.z > this.me.z - 6 || Math.abs(p.pos.x - this.me.x) > 3) p.place(this.me.x + rnd(-.3, .3), this.me.z - 12, this.me.x, this.me.z);
+    p.maxSpeed = 2.5;
     const build = rnd(...S.build);
     this.after(build, () => this.onset());
   }
@@ -192,14 +194,8 @@ export class Game {
       this.stats.whistleTotal++;
       this.audio.whistle(0.5); this.ui.callout('휘슬! 멈춤', 'warn', 900);
       flashDef(this.defs[0], this.laneSpot(r.side, rnd(.5, .7)), r.flashMs);
-    } else if (r.kind === 'shoulder') {
-      this.stats.shoulderTotal++;
-      const d = this.defs[2]; d.setVisible(true); d.setRing(true, '#ff4d3a');
-      d.place(this.me.x + r.side * rnd(6.5, 8), this.me.z + rnd(-1.5, 1), this.me.x, this.me.z);
-      d.maxSpeed = 2.2; r.sideDef = d;
-      this.ui.callout('어깨 체크! 뒤를 봐', 'warn', 1400); this.ui.edges(true); this.audio.say('뒤!'); this.audio.steps();
     }
-    if (r.kind !== 'shoulder') { this.pressSpeed = Math.max(2.4, (Math.abs(this.presser.pos.z - this.me.z) - 1.2) / (r.windowMs / 1000) - this.me.v + 1.2); }
+    this.pressSpeed = Math.max(2.4, (Math.abs(this.presser.pos.z - this.me.z) - 1.2) / (r.windowMs / 1000) - this.me.v + 1.2);
     this.ui.timer(1);
     r.expire = this.after(r.windowMs, () => this.resolve(null));
   }
@@ -210,7 +206,9 @@ export class Game {
     if (kind === 'C' && this.zones() < 3) return;
     if (this.phase === 'shotDecide') return this.resolveShot(kind, tReal);
     if ((this.phase === 'shotRun' || this.phase === 'shotSet') && !this.shotEarly) { this.shotEarly = true; this.ui.callout('아직! 골키퍼를 봐요', 'warn', 800); return; }
-    if (this.phase === 'build' && this.rally && !this.rally.early) { this.rally.early = true; this.ui.callout('아직! 보고 판단해요', 'warn', 700); return; }
+    if ((this.phase === 'build' || this.phase === 'scanSet' || this.phase === 'scan') && this.rally && !this.rally.early) {
+      this.rally.early = true; this.ui.callout(this.phase === 'build' ? '아직! 보고 판단해요' : '아직! 공이 오면 패스해요', 'warn', 800); return;
+    }
     if (this.phase !== 'decide') return;
     this.resolve(kind, tReal);
   }
@@ -234,25 +232,36 @@ export class Game {
       }
       if (r.kind === 'whistle') this.stats.whistleOk++;
       if (r.kind === 'both') this.stats.bothOk++;
-      if (r.kind === 'shoulder') { this.stats.shoulderOk++; if (!r.seen) this.stats.unseen++; }
       const speed = rt != null ? clamp(1 - rt / r.windowMs, 0, 1) : 0.5;
-      let pts = (100 + 100 * speed) * mult;
+      let pts = (100 + 100 * speed) * mult, scanNote = null;
       if (r.scanned) pts += 40 * mult;
-      if (r.kind === 'shoulder' && !r.seen) pts *= 0.3;
+      if (r.kind === 'scan') { // 양쪽 다 봤으면 +40, 공 받기 1.2초 안에 한 번 더 봤으면 +40, 하나도 안 보고 맞히면 30%만
+        const sc = r.scan, both = sc.seen[-1] && sc.seen[1], late = Math.max(sc.lastSeen[-1] ?? -1e9, sc.lastSeen[1] ?? -1e9) >= r.onsetAt - 1200;
+        this.stats.scanOk++;
+        if (!sc.seen[-1] && !sc.seen[1]) { pts *= 0.3; this.stats.unseen++; scanNote = '찍었어요? 둘러보고 골라요'; }
+        else {
+          if (both) { pts += 40 * mult; this.stats.scanBoth++; }
+          if (late) pts += 40 * mult;
+          scanNote = both && late ? '양쪽 확인 + 막판 확인!' : both ? '양쪽 다 봤어요' : late ? '막판 확인!' : null;
+        }
+      }
       pts = Math.round(pts * this.combo());
       this.addScore(pts);
       this.audio.ok(); this.world.setExcite(.35, .3);
       const label = r.answer === 'none' ? '멈춤 성공' : r.answer === 'C' ? '드리블 돌파' : (r.answer === 'L' ? '← 패스' : '패스 →');
       this.ui.pop(`+${pts}`, 'good'); this.ui.pop(rt != null ? `${label} · ${rt}ms` : label, 'small');
       if (r.scanned) this.ui.pop('스캔 보너스', 'small gold');
-      if (r.kind === 'shoulder' && !r.seen) this.ui.pop('다음엔 돌아보고 판단!', 'small');
+      if (scanNote) this.ui.pop(scanNote, 'small gold');
       if (r.answer === 'L' || r.answer === 'R') { this.stats.callChances++; r.receiver = this.mateOnSide(r.answer === 'L' ? -1 : 1); r.receiverNum = r.receiver.number; }
+      if (r.kind === 'scan') this.scanReveal(r, input);
       this.playCorrect(r);
     } else {
       this.streak = 0;
       this.audio.bad(); this.audio.groan(); this.ui.flash(true);
-      const why = input === null ? '늦었어요!' : r.answer === 'none' ? '휘슬엔 멈춰요' : r.answer === 'C' ? '양쪽 다 막히면 가운데 = 돌파' : input === 'C' ? '열린 쪽이 있으면 패스!' : '막힌 쪽이에요';
-      this.ui.center('MISS', 'bad'); this.ui.pop(why, 'small bad');
+      const why = r.kind === 'scan' ? this.scanWhy(r, input) : input === null ? '늦었어요!' : r.answer === 'none' ? '휘슬엔 멈춰요' : r.answer === 'C' ? '양쪽 다 막히면 가운데 = 돌파' : input === 'C' ? '열린 쪽이 있으면 패스!' : '막힌 쪽이에요';
+      if (r.kind !== 'scan') this.ui.center('MISS', 'bad'); // 둘러보기 패스는 정답 미니맵이 대신 보여 준다
+      this.ui.pop(why, 'small bad');
+      if (r.kind === 'scan') this.scanReveal(r, input);
       this.playWrong(r);
     }
     this.ui.setCombo(this.combo());
@@ -271,6 +280,7 @@ export class Game {
       const to = m.pos.clone().addScaledVector(m.vel, T); to.y = 0.11;
       this.ballFly(to, T, .25, () => {
         this.ballHold(m); this.audio.touch();
+        if (r.kind === 'scan') this.scanFormation(); // 공을 받은 친구들은 원래 자리로 돌아간다
         this.after(380, () => {
           this.audio.kick(.55);
           const back = new THREE.Vector3(this.me.x + 0.12, .11, this.me.z - 3.6);
@@ -288,7 +298,6 @@ export class Game {
     } else if (r.answer === 'none') {
       this.after(700, next);
     } else this.after(600, next);
-    if (r.sideDef) this.after(600, () => r.sideDef.setVisible(false));
   }
 
   playWrong(r) {
@@ -298,13 +307,21 @@ export class Game {
       d.setVisible(true); d.glow(.6); this.world.kickBoot(r.input === 'L' ? -1 : 1, 1); this.audio.kick(.7);
       const to = d.pos.clone(); to.y = .11;
       this.ballFly(to, clamp(this._dist(d) / 15, .4, 1), .15, () => { this.ballHold(d); this.audio.touch(); d.moveTo(d.pos.x + rnd(-4, 4), d.pos.z + 25, 6.5); this.after(1300, lose); });
-    } else if (r.kind === 'shoulder' && r.sideDef) {
-      const d = r.sideDef; d.moveTo(this.me.x, this.me.z - 1, 7); this.after(450, () => { d.tackle((this.me.x - d.pos.x) * .1, 0); this.ballHold(d); this.after(1100, lose); });
+    } else if (r.kind === 'scan') { // 수비가 붙은 친구에게 패스 → 그 수비가 가로챔 / 시간 초과 → 그 수비가 달려와 뺏음
+      const d = r.tight; r.interceptBy = d;
+      if (r.input === 'L' || r.input === 'R') {
+        this.world.kickBoot(r.input === 'L' ? -1 : 1, 1); this.audio.kick(.7);
+        const to = d.pos.clone(); to.y = .11;
+        this.ballFly(to, clamp(this._dist(d) / 15, .4, 1), .15, () => { this.ballHold(d); this.audio.touch(); d.moveTo(d.pos.x + rnd(-4, 4), d.pos.z + 25, 6.5); this.after(1300, lose); });
+      } else {
+        d.moveTo(this.me.x, this.me.z - 1, 8);
+        this.after(700, () => { d.tackle((this.me.x - d.pos.x) * .1, 0); this.ballHold(d); this.audio.touch(); this.after(1100, lose); });
+      }
     } else { // 시간 초과·휘슬 반칙·잘못된 돌파 → 압박 수비가 뺏음
       const p = this.presser; p.setVisible(true); p.moveTo(this.me.x, this.me.z - 1.2, 8);
       this.after(380, () => { p.tackle(0, .4); this.ballHold(p); this.audio.touch(); if (r.answer === 'none' && r.input) this.audio.whistle(0.3); this.after(1100, lose); });
     }
-    this.defs.forEach(d => { if (d !== r.interceptBy && d !== r.sideDef && d !== this.presser) d.setVisible(false); });
+    this.defs.forEach(d => { if (d !== r.interceptBy && d !== this.presser) d.setVisible(false); });
   }
 
   afterRally(ok) {
@@ -335,9 +352,141 @@ export class Game {
     const prevTod = this.spec?.tod;
     this.spec = levelSpec(this.level);
     if (announce) { this.ui.center(`LEVEL ${this.level}`, 'gold'); this.audio.level(); }
-    const notes = { 3: '양쪽 다 막히면 가운데를 눌러 돌파!', 4: '어깨 체크 등장 · 폰을 돌려 뒤를 봐요', 5: '휘슬이 울리면 아무것도 누르지 마요', 7: '친구들이 자리를 바꿔요 · 등번호를 기억!' };
+    const notes = { 2: '새 규칙! 공 받기 전에 양옆을 둘러봐요', 3: '양쪽 다 막히면 가운데를 눌러 돌파!', 4: '둘러보는 사이 수비가 옮겨 붙어요 · 받기 직전에 한 번 더!', 5: '휘슬이 울리면 아무것도 누르지 마요', 7: '친구들이 자리를 바꿔요 · 등번호를 기억!' };
     if (this.mode === 'challenge' && notes[this.level]) this.after(900, () => this.ui.callout(notes[this.level], 'warn', 2600));
     if (this.mode === 'challenge' && prevTod && prevTod !== this.spec.tod) this.after(600, () => this.ui.callout(this.spec.tod === 'dusk' ? '해 질 녘 경기' : '야간 경기 · 조명 ON', '', 1600));
+  }
+
+  // ---------- 둘러보기 패스 (LV2~, 훈련장) ----------
+  // 앞 친구에게 공을 주고(원) 돌려받기(투) 전 몇 초 동안 폰을 돌려(또는 화면을 끌어) 양옆을 본다.
+  // 공이 발에 닿는 순간 화면이 가려지고, 기억만으로 수비가 안 붙은 친구 쪽을 누른다.
+  // 실제 선수들이 공 받기 전에 고개를 돌려 주변을 살피는 습관(스캐닝)을 그대로 옮긴 규칙.
+  scanSpec() {
+    const L = this.level;
+    return {
+      ang: L <= 2 ? [48, 60] : L === 3 ? [55, 75] : L <= 6 ? [65, 95] : [75, 105], // 정면에서 친구까지 각도(°): 클수록 더 돌아봐야 보인다
+      scanMs: Math.max(2200, 3400 - 150 * (L - 2)),  // 공이 나갔다 돌아오기까지 둘러볼 시간
+      decideMs: Math.max(1000, 1900 - 90 * (L - 2)), // 화면이 가려진 뒤 고를 시간
+      loose: L >= 4,                                  // 빈 쪽 친구 뒤에도 (떨어져 있는) 수비
+      switchP: L >= 7 ? .5 : L >= 4 ? .35 : 0,        // 둘러보는 사이 수비가 옆 친구 쪽으로 옮겨 붙을 확률
+    };
+  }
+  scanStart(r) {
+    const Q = this.scanSpec(), me = this.me, first = !this.stats.scanTotal;
+    this.stats.scanTotal++;
+    this.phase = 'scanSet'; this.presser.setVisible(false);
+    const free = Math.random() < .5 ? -1 : 1;
+    r.scan = { Q, free, seen: {}, lastSeen: {}, yawMin: this.look.yaw, yawMax: this.look.yaw, startAt: null, switchAt: null, switched: false };
+    r.answer = free < 0 ? 'L' : 'R';
+    // 장면을 잠깐 끊고(0.1초) 새 자리로: 양옆 친구는 옆으로 넓게, 앞 친구는 공을 받은 상태
+    this.ui.cut();
+    r.sideMates = { [-1]: this.mateOnSide(-1), [1]: this.mateOnSide(1) };
+    for (const s of [-1, 1]) {
+      const m = r.sideMates[s], th = rnd(...Q.ang) * Math.PI / 180, d = rnd(8.5, 11);
+      m.rel = new THREE.Vector3(s * d * Math.sin(th), 0, -d * Math.cos(th));
+      m.place(me.x + m.rel.x, me.z + m.rel.z, me.x, me.z);
+    }
+    // 수비: 막힌 친구 바로 앞(패스 길)에 붙는다. LV4부터는 빈 친구 뒤쪽에도 떨어져 있는 수비가 하나 더
+    // 수비는 처음부터 제자리(화면 밖 옆)에 둔다 — 앞에서 뛰어가는 게 보이면 둘러보지 않아도 답을 알게 되므로
+    r.tight = this.defs[0]; r.loose = Q.loose ? this.defs[1] : null;
+    for (const d of [r.tight, r.loose]) if (d) {
+      const [x, z] = d === r.tight ? this.scanSpot(r.sideMates[-free].rel, 'tight') : this.scanSpot(r.sideMates[free].rel, 'loose');
+      d.setVisible(true); d.setRing(false); d.glow(0); d.maxSpeed = 9;
+      d.place(x, z, me.x, me.z); d.face = new THREE.Vector3(me.x, 0, me.z);
+    }
+    // 앞 친구(벽)에게 공을 준다
+    const wall = this.mates[2], used = [r.sideMates[-1].number, r.sideMates[1].number];
+    wall.setNumber(shuffle(NUMS).find(n => !used.includes(n)));
+    wall.setVisible(true); wall.setBlank(false); wall.showBadge(false); wall.setRing(true, '#ffc93c'); wall.rel = null;
+    wall.place(me.x + rnd(-.6, .6), me.z - 10, me.x, me.z); wall.face = new THREE.Vector3(me.x, 0, me.z);
+    r.wall = wall; this.ballHold(wall);
+    // 0.4초 뒤부터 둘러보기 시간
+    this.after(400, () => {
+      if (this.rally !== r || this.phase !== 'scanSet') return;
+      this.phase = 'scan'; r.scan.startAt = this.clock;
+      r.scan.yawMin = r.scan.yawMax = this.look.yaw;
+      this.ui.edges(true);
+      const gyro = this.opts.gyro && this.sensors.hasOrient;
+      if (first) this.ui.callout(gyro ? '공이 돌아오기 전에 폰을 돌려 양옆을 봐요!' : '공이 돌아오기 전에 화면을 옆으로 끌어 양옆을 봐요!', 'warn', Math.min(2600, Q.scanMs - 300));
+      else this.ui.callout('둘러봐!', 'warn', 900);
+      if (Math.random() < Q.switchP) r.scan.switchAt = this.clock + Q.scanMs * rnd(.5, .75);
+      // 앞 친구가 돌려준다 (공이 0.9초 동안 굴러 온다)
+      this.after(Q.scanMs - 900, () => {
+        if (this.rally !== r || this.phase !== 'scan') return;
+        this.audio.kick(.5);
+        this.ballFly(new THREE.Vector3(me.x + .1, .11, me.z - 1.1 - me.v * .9), .9, .04, () => this.scanArrive(r));
+      });
+    });
+  }
+  // 공이 발에 닿았다 → 화면을 가리고 판단 시간 시작
+  scanArrive(r) {
+    if (this.rally !== r || this.phase !== 'scan') return;
+    this.ballCarry(1.1); this.audio.touch(1);
+    this.phase = 'decide'; r.onsetAt = this.clock; r.onsetReal = performance.now();
+    this.ui.edges(false); this.ui.blind(true); this.ui.timer(1);
+    r.expire = this.after(r.windowMs, () => this.resolve(null));
+    const w = r.wall; // 앞 친구는 옆으로 빠진다
+    w.moveTo(w.pos.x + (Math.random() < .5 ? -1 : 1) * 10, w.pos.z - 8, 5);
+    this.after(2500, () => { if (this.rally === r || this.rally?.wall !== w) w.setVisible(false); });
+  }
+  // 지금 화면 안에 보이는지 (둘러보기 방향 기준)
+  inView(pos) {
+    const me = this.me, cam = this.world.camera;
+    const ang = Math.atan2(-(pos.x - me.x), -(pos.z - me.z));
+    const diff = Math.atan2(Math.sin(ang - this.look.yaw), Math.cos(ang - this.look.yaw));
+    return Math.abs(diff) < Math.atan(Math.tan(cam.fov * Math.PI / 360) * cam.aspect) * .92;
+  }
+  scanUpdate(r) {
+    const sc = r.scan, me = this.me;
+    if (this.phase === 'scan') {
+      sc.yawMin = Math.min(sc.yawMin, this.look.yaw); sc.yawMax = Math.max(sc.yawMax, this.look.yaw);
+      for (const s of [-1, 1]) if (this.inView(r.sideMates[s].pos)) { sc.seen[s] = true; sc.lastSeen[s] = this.clock; }
+      if (sc.switchAt && !sc.switched && this.clock >= sc.switchAt) { // 수비 이동: 막던 수비는 뒤로 빠지고, 뒤에 있던 수비가 패스 길로 들어온다
+        sc.switched = true; sc.switchedAt = this.clock; sc.free = -sc.free; r.answer = sc.free < 0 ? 'L' : 'R';
+        [r.tight, r.loose] = [r.loose, r.tight];
+      }
+    }
+    if (!['scanSet', 'scan', 'decide'].includes(this.phase)) return;
+    r.tight.moveTo(...this.scanSpot(r.sideMates[-sc.free].rel, 'tight'), 9); r.tight.face.set(me.x, 0, me.z);
+    if (r.loose) { r.loose.moveTo(...this.scanSpot(r.sideMates[sc.free].rel, 'loose'), 9); r.loose.face.set(me.x, 0, me.z); }
+    if (r.wall.face && !r.resolved) r.wall.face.set(me.x, 0, me.z);
+  }
+  // 수비 자리 (친구가 설 자리 rel 기준): 'tight' = 친구와 나 사이 패스 길(친구에게서 1.4m),
+  // 'loose' = 친구보다 22° 앞쪽으로 3.5m 더 먼 곳 — 패스 길이 비어 있는 게 한눈에 보이게
+  scanSpot(rel, role) {
+    const me = this.me, dl = Math.hypot(rel.x, rel.z) || 1;
+    if (role === 'tight') return [me.x + rel.x * (1 - 1.4 / dl), me.z + rel.z * (1 - 1.4 / dl)];
+    const s = Math.sign(rel.x) || 1, th = Math.atan2(Math.abs(rel.x), -rel.z) - 22 * Math.PI / 180, d = dl + 3.5;
+    return [me.x + s * d * Math.sin(th), me.z - d * Math.cos(th)];
+  }
+  scanFormation() { // 양옆 친구를 원래 앞쪽 자리로
+    const S = this.spec;
+    this.mateOnSide(-1).rel = new THREE.Vector3(-S.lane, 0, -S.ahead);
+    this.mateOnSide(1).rel = new THREE.Vector3(S.lane, 0, -S.ahead);
+  }
+  scanWhy(r, input) {
+    const sc = r.scan, name = (s) => s < 0 ? '왼쪽' : '오른쪽';
+    if (!input) return '늦었어요! 공이 오면 바로 패스';
+    if (input === 'C') return '수비가 안 붙은 친구 쪽을 눌러요';
+    const chosen = input === 'L' ? -1 : 1;
+    if (!sc.seen[-1] && !sc.seen[1]) return '둘러보지 않고 골랐어요 · 공 오기 전에 양옆!';
+    if (sc.switched && (sc.lastSeen[-1] ?? -1) < sc.switchedAt && (sc.lastSeen[1] ?? -1) < sc.switchedAt) return '수비가 옮겨 붙었어요 · 받기 직전에 한 번 더!';
+    if (!sc.seen[chosen]) return `${name(chosen)} 친구를 안 보고 골랐어요`;
+    return '수비가 붙은 친구였어요';
+  }
+  // 정답 미니맵: 친구·수비 자리, 내가 본 범위(노란 부채꼴), 내 패스
+  scanReveal(r, input) {
+    const sc = r.scan, me = this.me, cam = this.world.camera;
+    const rel = (p) => ({ x: p.pos.x - me.x, z: p.pos.z - me.z });
+    const chosen = input === 'L' ? -1 : input === 'R' ? 1 : 0;
+    this.ui.blind(false);
+    this.ui.scanMap({
+      yawMin: sc.yawMin, yawMax: sc.yawMax, hHalf: Math.atan(Math.tan(cam.fov * Math.PI / 360) * cam.aspect),
+      mates: [-1, 1].map(s => ({ ...rel(r.sideMates[s]), num: r.sideMates[s].number, free: s === sc.free })),
+      defs: [r.tight, r.loose].filter(Boolean).map(d => ({ ...rel(d), tight: d === r.tight })),
+      pass: chosen ? rel(r.sideMates[chosen]) : null, ok: r.correct,
+      title: r.correct ? '정답! 빈 친구에게 패스' : !input ? '시간 초과' : '수비가 붙은 친구',
+    }, 2200);
   }
 
   // ---------- 슛 (1:1 찬스) ----------
@@ -352,6 +501,11 @@ export class Game {
     if (first) this.after(800, () => this.ui.pop('쏠린 반대쪽으로 · 뛰어나오면 가운데 칩슛', 'small gold'));
     this.ui.hint('shot', 3);
     this.mates.forEach((m, i) => { if (i < 2) m.rel.set((i ? 1 : -1) * 7, 0, -2); });
+    // 둘러보기 패스처럼 천천히 진행된 공격이면 골대에서 멀다 → 화면을 잠깐 끊고 페널티 박스 앞으로 옮긴다
+    if (this.me.z > SHOT_Z + 8) {
+      this.ui.cut(); this.me.z = SHOT_Z + 3; this.me.v = 4; this.world.rig.position.z = this.me.z;
+      this.mates.forEach(m => { if (m.group.visible && m.rel) m.place(this.me.x + m.rel.x, this.me.z + m.rel.z); });
+    }
     this.presser.setVisible(false); this.defs.forEach(d => d.setVisible(false));
     const k = this.keeper; k.place(0, KEEPER_Z, 0, 0); k.face = new THREE.Vector3(0, 0, 0);
     // 골대가 화면 폭에 거의 차도록 확대 (세로 폰은 조금, 가로 화면은 많이)
@@ -591,12 +745,13 @@ export class Game {
     }
     this.clock += dt * 1000;
     this.runTimers();
-    const me = this.me, S = this.spec || levelSpec(1);
+    const me = this.me, S = this.spec || levelSpec(1), r = this.rally;
     // 이동 속도: 발 센서가 켜져 있으면 발을 움직여야 달린다
     let target = 3.2;
     const useFeet = this.opts.motion && this.sensors.hasMotion;
     const feet = useFeet ? (this.sensors.active ? 1 : 0.3) : 1;
-    if (this.mode === 'challenge' && ['build', 'decide', 'resolve'].includes(this.phase)) {
+    if (r && r.kind === 'scan' && ['scanSet', 'scan', 'decide'].includes(this.phase)) target = 1.5; // 공을 주고받는 동안 천천히
+    else if (this.mode === 'challenge' && ['build', 'decide', 'resolve'].includes(this.phase)) {
       const left = Math.max(1, (this.attackSize - this.rallyIdx));
       target = me.z <= SHOT_Z + 3 ? 0.8 : clamp((me.z - SHOT_Z) / (left * 6), 1.2, 4.6);
     } else if (this.phase === 'shotRun') target = clamp((me.z - SPOT_Z) * 1.4, 1.2, 7);
@@ -633,21 +788,15 @@ export class Game {
       if (this.rally && this.phase === 'build') this.rally.scanned = true;
     } else if (Math.abs(L.yaw) < .2) L.armed = false;
 
-    // 어깨 체크: 화면 안에 들어왔는지
-    const r = this.rally;
-    if (r && r.kind === 'shoulder' && r.sideDef && !r.seen && this.phase === 'decide') {
-      const d = r.sideDef;
-      const ang = Math.atan2(-(d.pos.x - me.x), -(d.pos.z - me.z));
-      const diff = Math.atan2(Math.sin(ang - L.yaw), Math.cos(ang - L.yaw));
-      const half = THREE.MathUtils.degToRad(this.world.camera.fov / 2) * Math.min(1.6, this.world.camera.aspect) * .9;
-      if (Math.abs(diff) < Math.max(.35, half)) { r.seen = true; this.ui.edges(false); this.ui.callout('봤다!', '', 500); }
-    }
+    // 둘러보기 패스: 무엇을 언제 봤는지 기록하고, 수비 위치를 잡는다
+    if (r && r.kind === 'scan' && r.scan) this.scanUpdate(r);
 
     // 동료·수비 이동
     for (const m of this.mates) {
       if (!m.group.visible || !m.rel) continue;
       if (this.ballState === 'held' && this.holder === m) { m.moveTo(m.pos.x, m.pos.z - me.v * .3, 2); continue; }
-      m.moveTo(me.x + m.rel.x + Math.sin(this.clock / 900 + m.number) * .8, me.z + m.rel.z, me.v + 3);
+      const tx = me.x + m.rel.x + Math.sin(this.clock / 900 + m.number) * .8, tz = me.z + m.rel.z;
+      m.moveTo(tx, tz, Math.hypot(tx - m.pos.x, tz - m.pos.z) > 4 ? Math.max(8.5, me.v + 3) : me.v + 3); // 멀리 떨어졌으면 빨리 자리로
     }
     const p = this.presser;
     if (p && p.group.visible && this.ballState !== 'held') {
@@ -655,13 +804,13 @@ export class Game {
       else if (this.phase === 'decide') p.moveTo(me.x, me.z - 1.3, (this.pressSpeed || 3) + me.v);
       p.face = new THREE.Vector3(me.x, 0, me.z);
     }
-    if (r && r.sideDef && r.sideDef.group.visible && this.phase === 'decide') r.sideDef.moveTo(me.x + r.side * 2, me.z - .5, 2.2 + me.v);
     for (const pl of [...this.mates, ...this.defs, this.keeper]) pl.update(dt);
     this.keeper.face && this.keeper.face.set(this.ball.position.x, 0, this.ball.position.z);
     this.updateBall(dt);
 
     // HUD
     if (r && (this.phase === 'decide' || this.phase === 'shotDecide') && r.onsetReal) this.ui.timer(1 - (performance.now() - r.onsetReal) / r.windowMs);
+    else if (r && this.phase === 'scan' && r.scan.startAt != null) this.ui.timer(1 - (this.clock - r.scan.startAt) / r.scan.Q.scanMs); // 공이 돌아올 때까지
     this.ui.feet(useFeet ? clamp(this.sensors.cadence / 150, 0, 1) : null);
   }
 
@@ -702,7 +851,7 @@ export class Game {
   quit() {
     this.phase = 'idle'; this.timers = []; this.paused = false; this.rally = null; this.slow = null; this.burst = 0;
     this.world.setZoom(1, true);
-    this.ui.hud(false); this.ui.motHide(); this.ui.edges(false); this.ui.timer(null);
+    this.ui.hud(false); this.ui.motHide(); this.ui.edges(false); this.ui.timer(null); this.ui.blind(false);
     [...this.mates, ...this.defs, this.keeper].forEach(p => p.setVisible(false));
     this.world.yaw.rotation.y = 0;
   }
@@ -725,7 +874,9 @@ export class Game {
       speed: s.rts.length ? clamp((1500 - avgRt) / 1100, 0, 1) : 0,
       vision: s.minFlash != null ? clamp((920 - s.minFlash) / 750, 0, 1) * .8 + acc * .2 : (this.mode === 'mot' ? (s.motTotal ? s.motOk / s.motTotal : 0) : 0),
       call: this.opts.voice && s.callChances ? clamp(s.calls / s.callChances, 0, 1) : null,
-      scan: clamp(s.scans / Math.max(.5, dur / 60) / 18, 0, 1),
+      // 스캔: 둘러본 횟수 + (둘러보기 패스가 있었다면) 보고 맞힌 비율
+      scan: s.scanTotal ? clamp(s.scans / Math.max(.5, dur / 60) / 18, 0, 1) * .4 + Math.max(0, s.scanOk - s.unseen) / s.scanTotal * .6
+        : clamp(s.scans / Math.max(.5, dur / 60) / 18, 0, 1),
       brake: s.whistleTotal ? s.whistleOk / s.whistleTotal : null,
     };
     const W = { judge: .32, speed: .2, vision: .18, call: .1, scan: .1, brake: .1 };
@@ -735,7 +886,7 @@ export class Game {
       mode: this.mode, title: this.M.title, ranked: !!this.M.ranked, score: Math.round(this.score), level: this.level,
       accuracy: Math.round(acc * 100), avgRt, decisions: s.decisions, correct: s.correct, calls: s.calls, callChances: s.callChances,
       goals: s.goals, shots: s.shots, scans: s.scans, scanPerMin: Math.round(s.scans / (dur / 60) * 10) / 10, minFlash: s.minFlash,
-      whistle: [s.whistleOk, s.whistleTotal], both: [s.bothOk, s.bothTotal], shoulder: [s.shoulderOk, s.shoulderTotal], unseen: s.unseen,
+      whistle: [s.whistleOk, s.whistleTotal], both: [s.bothOk, s.bothTotal], scanRound: [s.scanOk, s.scanTotal], unseen: s.unseen,
       mot: [s.motOk, s.motTotal], steps, stepsPerMin: Math.round(steps / (dur / 60)), duration: Math.round(dur),
       axes, brainIndex: bi, voiceOn: !!this.opts.voice, feetOn: !!(this.opts.motion && this.sensors.hasMotion),
     };
