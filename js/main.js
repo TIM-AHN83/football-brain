@@ -68,6 +68,7 @@ async function boot() {
   game.onEnd = onEnd;
   game.onTutorialDone = (finished) => { // 따라 하기가 끝나면(또는 건너뛰면) 챌린지로 안내
     endSession(); store.set('tutDone', true); showTitle();
+    if (finished) { game.setTaught('pass'); game.setTaught('shot'); } // 따라 하기에서 배운 기술은 카드를 다시 띄우지 않는다
     $('#tutdone-title').textContent = finished ? '준비 끝! 🎉' : '언제든 다시 따라 할 수 있어요';
     ui.open('scr-tutdone');
   };
@@ -75,6 +76,7 @@ async function boot() {
     zones: () => game.zones(),
     onTap: (zone, t, n) => { if (!game.swipeMode()) ui.zoneFlash(zone, n); game.onInput(zone, t); },
     swipeMode: () => game.swipeMode(),
+    holdMode: () => game.holdMode(), onHold: (zone) => game.holdLook(zone), // 둘러보기: 화면 한쪽을 꾹 = 그쪽 보기
     onSwipe: (sw) => { ui.swipeTrail(sw); game.onSwipe(sw); },
     onLook: (dx) => { game.look.drag -= dx * 0.0065; game.look.dragAt = performance.now(); },
     onLookKey: (v) => { game.look.key = v; },

@@ -40,6 +40,20 @@ function geos() {
   };
   return G;
 }
+// 둘러보기: 머리 위 ✔(빈 친구) / ✖(수비가 붙은 친구) 표시 그림
+let MARKS = null;
+function markTex(kind) {
+  MARKS = MARKS || {};
+  if (MARKS[kind]) return MARKS[kind];
+  const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  g.beginPath(); g.arc(64, 64, 56, 0, Math.PI * 2); g.fillStyle = kind === 'ok' ? '#2fbf6a' : '#e8402f'; g.fill();
+  g.lineWidth = 8; g.strokeStyle = '#ffffff'; g.stroke();
+  g.lineWidth = 15; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath();
+  if (kind === 'ok') { g.moveTo(36, 66); g.lineTo(56, 86); g.lineTo(92, 44); } else { g.moveTo(44, 44); g.lineTo(84, 84); g.moveTo(84, 44); g.lineTo(44, 84); }
+  g.stroke();
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return (MARKS[kind] = t);
+}
 let SHARED = null;
 function shared() {
   if (SHARED) return SHARED;
@@ -159,6 +173,16 @@ export class Footballer {
     this.mShirt.needsUpdate = true;
   }
   showBadge(on) { this.badge.visible = on; }
+  setMark(kind) { // null | 'ok' | 'no' — 화면 크기 고정, 등번호 배지 위
+    if (!kind && !this.mark) return;
+    if (!this.mark) {
+      this.markMat = new THREE.SpriteMaterial({ depthTest: false, sizeAttenuation: false, toneMapped: false });
+      this.mark = new THREE.Sprite(this.markMat); this.mark.scale.set(.09, .09, 1); this.mark.position.y = 2.75; this.mark.renderOrder = 21;
+      this.group.add(this.mark);
+    }
+    this.mark.visible = !!kind;
+    if (kind && this.markMat.map !== markTex(kind)) { this.markMat.map = markTex(kind); this.markMat.needsUpdate = true; }
+  }
   setRing(on, color) { this.ring.visible = on; if (color) this.ringMat.color.set(color); }
   setVisible(on) { this.group.visible = on; }
   glow(amount) { // 순간 번쩍임

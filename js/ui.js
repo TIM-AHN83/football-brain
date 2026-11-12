@@ -4,13 +4,24 @@ import { AGE_LABEL } from './store.js';
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const AXES = [['judge', '판단'], ['speed', '속도'], ['vision', '시야'], ['call', '콜'], ['scan', '스캔'], ['brake', '멈춤']];
+// 코치 한마디: 가장 약한 능력 → 운동장에서 바로 해 볼 수 있는 한 가지
 const TIPS = {
-  judge: '수비수가 보였던 쪽의 반대로 패스해요. 훈련장 "플래시 패스" 레벨 1~3으로 감을 먼저 잡아요.',
-  speed: '보자마자 손가락이 나가도록! "플래시 패스"를 하루 3판, 반응 시간이 줄어드는 걸 확인해요.',
-  vision: '화면 가운데만 보지 말고 양쪽 친구를 동시에 시야에 두어요. 멀리 작게 보이는 수비수도 놓치지 않기.',
-  call: '패스할 때 "7번 패스!"처럼 번호와 함께 크게 외쳐요. 실제 경기에서도 동료가 먼저 움직일 수 있어요.',
-  scan: '공 받기 전에 폰(고개)을 양옆으로 돌려 친구와 수비를 확인하고, 받기 직전에 한 번 더 봐요. 훈련장 "둘러보기 패스"로 연습!',
-  brake: '휘슬이 울리면 손을 멈춰요. 급할 때 한 번 멈추는 힘이 실수를 줄여 줘요.',
+  judge: '운동장에서: 공을 받기 전에 수비가 없는 친구를 먼저 찾아 두세요. 그러면 받자마자 바로 줄 수 있어요.',
+  speed: '운동장에서: 결정이 빠르면 수비가 붙기 전에 패스할 수 있어요. 게임에선 보자마자 손가락이 나가게 연습!',
+  vision: '운동장에서: 공만 보지 말고 고개를 들어 양쪽 친구를 한 번에 봐요. 멀리 있는 수비도 놓치지 않기.',
+  call: '운동장에서: 패스할 때 "7번!"처럼 친구 이름이나 번호를 크게 불러요. 친구가 미리 준비할 수 있어요.',
+  scan: '운동장에서: 공이 오기 전에 어깨 너머로 왼쪽·오른쪽을 한 번씩 봐요. 받기 직전에 한 번 더 보면 더 좋아요.',
+  brake: '운동장에서: 급할수록 한 번 멈추고 보면 실수가 줄어요. 휘슬이 울리면 바로 멈추는 습관도!',
+};
+// 새 기술 카드 (레벨에서 처음 나올 때 한 번): 제목 · 하는 법 · 진짜 경기에서
+const TEACH = {
+  pass: { tag: '기본 기술', title: '빈 친구에게 패스', how: '빨간 수비수가 막은 친구 말고, <em>비어 있는 친구 쪽</em> 화면을 눌러요.', real: '진짜 경기: 수비가 없는 친구에게 주면 공을 뺏기지 않아요.' },
+  scan: { tag: '새 기술 · 레벨 2', title: '둘러보기 👀', how: '공이 오기 전에 <em>화면 왼쪽·오른쪽을 꾹</em> 눌러 양옆을 봐요 (폰을 돌려도 돼요). 머리 위 <em>✔ = 빈 친구</em>, ✖ = 막힌 친구. 공이 오면 ✔ 쪽을 톡!', real: '진짜 경기: 공 받기 전에 고개를 돌려 본 선수가 받자마자 좋은 패스를 해요.' },
+  blind: { tag: '레벨 업 · 레벨 3', title: '기억으로 패스 🧠', how: '이제 공이 발에 오면 <em>화면이 가려져요</em>. 미리 봐 둔 <em>✔ 친구 쪽</em>을 눌러요.', real: '진짜 경기: 공을 받는 순간엔 공을 봐야 해요. 그래서 미리 봐 둔 그림으로 패스해요.' },
+  both: { tag: '새 기술 · 레벨 4', title: '드리블 돌파 💨', how: '양쪽 친구가 <em>둘 다 막히면</em> 줄 곳이 없어요. <em>화면 가운데</em>를 눌러 앞으로 치고 나가요.', real: '진짜 경기: 줄 곳이 없으면 억지로 패스하지 말고, 공을 몰고 빈 공간으로!' },
+  switch: { tag: '레벨 업 · 레벨 5', title: '수비가 움직여요 🔄', how: '둘러보는 사이 수비가 <em>다른 친구에게 옮겨 붙을</em> 수 있어요. 공이 오기 직전에 <em>한 번 더</em> 봐요.', real: '진짜 경기: 잘하는 선수는 공 받기 직전에 마지막으로 한 번 더 봐요.' },
+  shot: { tag: '마무리', title: '1:1 슛 🥅', how: '공을 골대 <em>구석 쪽으로 쓸어 올려요</em>. 빠르게 쓸수록 세게! 골키퍼가 한쪽으로 기울면 <em>반대 구석</em>.', real: '진짜 경기: 골키퍼가 먼저 움직이면 반대쪽이 비어요.' },
+  whistle: { tag: '훈련 규칙', title: '휘슬엔 멈춤 🔔', how: '휘슬이 울리면 <em>아무것도 누르지 말고</em> 기다려요.', real: '진짜 경기: 휘슬이 울리면 바로 멈춰요. 급할 때 멈추는 힘이 실수를 줄여요.' },
 };
 export function grade(bi) { return bi >= 90 ? '월드클래스' : bi >= 75 ? '국가대표' : bi >= 60 ? '주전' : bi >= 40 ? '유망주' : '루키'; }
 
@@ -19,7 +30,8 @@ export class UI {
     this.el = {
       hud: $('#hud'), score: $('#hud-score'), level: $('#hud-level'), combo: $('#hud-combo'), lives: $('#hud-lives'), attack: $('#hud-attack'),
       callout: $('#hud-callout'), center: $('#hud-center'), pop: $('#hud-pop'), voice: $('#hud-voice'), timer: $('#hud-timer'), timerBar: $('#hud-timer i'),
-      hint: $('#hud-hint'), zone: $('#fx-zone'), blind: $('#fx-blind'), map: $('#scan-map'), tut: $('#tut-card'), tutSwipe: $('#tut-swipe'), feet: $('#m-feet'), mic: $('#m-mic'), mot: $('#mot-choices'), edgeL: $('#fx-edge-l'), edgeR: $('#fx-edge-r'), flash: $('#fx-flash'), toast: $('#toast'),
+      hint: $('#hud-hint'), zone: $('#fx-zone'), blind: $('#fx-blind'), map: $('#scan-map'), tut: $('#tut-card'), tutSwipe: $('#tut-swipe'),
+      teach: $('#teach'), chipL: $('#chip-l'), chipR: $('#chip-r'), feet: $('#m-feet'), mic: $('#m-mic'), mot: $('#mot-choices'), edgeL: $('#fx-edge-l'), edgeR: $('#fx-edge-r'), flash: $('#fx-flash'), toast: $('#toast'),
     };
     this._feet = -1;
   }
@@ -94,8 +106,8 @@ export class UI {
     this.el.hud.classList.toggle('tut', step != null);
     if (step == null) { c.hidden = true; this.el.tutSwipe.hidden = true; return; }
     const S = [
-      ['패스', '빨간 수비수가 막은 쪽의 <em>반대쪽</em>을 눌러요'],
-      ['번쩍 패스', '이번엔 수비수가 <em>잠깐만</em> 보여요. 잘 보고 반대쪽!'],
+      ['패스', '빨간 수비수가 없는 쪽, <em>빈 친구</em> 쪽 화면을 눌러요'],
+      ['번쩍 패스', '이번엔 수비수가 <em>잠깐만</em> 보여요. 잘 보고 빈 친구 쪽!'],
       ['슛', '공을 골대 <em>구석</em> 쪽으로 손가락으로 쓸어 올려요'],
       ['골키퍼 속이기', '골키퍼가 한쪽으로 <em>기울면</em> 반대 구석으로 차요'],
     ][step];
@@ -105,6 +117,26 @@ export class UI {
     this.el.tutSwipe.hidden = step < 2;
   }
   tutPulse(zone) { this.el.hint.querySelector(`[data-z="${zone}"]`)?.classList.add('pulse'); }
+  // 새 기술 카드: 그림 + 하는 법 + 진짜 경기에서. onGo = '해 볼게요!' (null 이면 숨김)
+  teach(rule, onGo) {
+    const t = this.el.teach; if (!t) return;
+    if (!rule) { t.hidden = true; return; }
+    const c = TEACH[rule] || TEACH.pass;
+    $('#teach-tag').textContent = c.tag; $('#teach-title').textContent = c.title;
+    $('#teach-how').innerHTML = c.how; $('#teach-real').textContent = '⚽ ' + c.real;
+    drawTeach($('#teach-cv'), rule);
+    t.hidden = false;
+    const go = $('#teach-go'); go.onclick = () => { go.onclick = null; t.hidden = true; onGo && onGo(); };
+  }
+  // 둘러보기: 화면 양쪽 '꾹 = 그쪽 보기' 칩, 본 쪽은 초록 ✔ (null 이면 숨김)
+  scanChips(st) {
+    const L = this.el.chipL, R = this.el.chipR; if (!L) return;
+    if (!st) { L.hidden = R.hidden = true; return; }
+    L.hidden = R.hidden = false;
+    L.classList.toggle('seen', !!st.l); R.classList.toggle('seen', !!st.r);
+    L.classList.toggle('nudge', !!st.nudge && !st.l); R.classList.toggle('nudge', !!st.nudge && !st.r);
+    L.innerHTML = st.l ? '✔ 왼쪽 봤어요' : '◀ 꾹<br>왼쪽 보기'; R.innerHTML = st.r ? '오른쪽 봤어요 ✔' : '꾹 ▶<br>오른쪽 보기';
+  }
   // 슛: 쓸어 올린 자국
   swipeTrail(sw) {
     if (sw.x0 == null) return;
@@ -211,6 +243,13 @@ export class UI {
     $('#res-score').textContent = s.score.toLocaleString('ko-KR');
     $('#res-sub').textContent = `LV ${s.level} · 정확도 ${s.accuracy}% · ${s.correct}/${s.decisions}`;
     $('#res-bi').textContent = s.brainIndex; $('#res-grade').textContent = grade(s.brainIndex);
+    $('#res-bi2').textContent = s.brainIndex; $('#res-grade2').textContent = grade(s.brainIndex);
+    const key = [
+      ['평균 반응', s.avgRt ? `${s.avgRt}<small>ms</small>` : '–'],
+      s.mode === 'challenge' || s.mode === 'shoot' ? ['골', `${s.goals}<small>/${s.shots}</small>`] : s.mode === 'mot' ? ['등번호 기억', `${s.mot[0]}<small>/${s.mot[1]}</small>`] : ['맞힘', `${s.correct}<small>/${s.decisions}</small>`],
+      ['둘러보기', s.scanRound && s.scanRound[1] ? `${s.scanRound[0]}<small>/${s.scanRound[1]}</small>` : `${s.scanPerMin}<small>/분</small>`],
+    ];
+    $('#res-key').innerHTML = key.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
     this.drawRadar($('#radar'), s.axes);
     const cells = [
       ['평균 반응', s.avgRt ? `${s.avgRt}<small>ms</small>` : '–'],
@@ -261,4 +300,48 @@ export async function shareCard(s, profile, url, ui) {
   g.fillStyle = '#0b1428'; g.font = '400 50px "Black Han Sans",sans-serif'; g.textAlign = 'center'; g.fillText('너도 도전해 봐!  수비수는 0.3초만 보여', 540, 1712);
   g.font = '700 36px "Noto Sans KR",sans-serif'; g.fillText(`@halftime.parenttalk  ·  ${url.replace(/^https?:\/\//, '').replace(/\/$/, '')}`, 540, 1768);
   return await new Promise(res => c.toBlob(res, 'image/png'));
+}
+
+// 새 기술 카드 그림: 위에서 본 도식 (나 = 흰 점, 노랑 = 우리 편, 빨강 = 수비, 초록 화살표 = 정답)
+function drawTeach(cv, rule) {
+  const g = cv.getContext('2d'), W = 280, H = 150, k = cv.width / W;
+  g.setTransform(k, 0, 0, k, 0, 0); g.clearRect(0, 0, W, H);
+  g.fillStyle = '#1f5a34'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = 'rgba(255,255,255,.18)'; g.lineWidth = 1; for (let x = 20; x < W; x += 40) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+  const dot = (x, y, r, c) => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fillStyle = c; g.fill(); };
+  const mate = (x, y, n) => { dot(x, y, 11, '#ffc93c'); g.fillStyle = '#0b1428'; g.font = '800 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(n, x, y + 1); };
+  const def = (x, y) => { dot(x, y, 9, '#ffffff'); dot(x, y, 7.5, '#e8402f'); };
+  const me = (x, y) => { dot(x, y, 8, '#ffffff'); };
+  const mark = (x, y, ok) => { dot(x, y, 8, ok ? '#2fbf6a' : '#e8402f'); g.strokeStyle = '#fff'; g.lineWidth = 2.5; g.lineCap = 'round'; g.beginPath();
+    if (ok) { g.moveTo(x - 4, y); g.lineTo(x - 1, y + 3); g.lineTo(x + 4, y - 3); } else { g.moveTo(x - 3, y - 3); g.lineTo(x + 3, y + 3); g.moveTo(x + 3, y - 3); g.lineTo(x - 3, y + 3); } g.stroke(); };
+  const arrow = (x1, y1, x2, y2, col = '#38d27a', dash = false) => {
+    const a = Math.atan2(y2 - y1, x2 - x1); g.strokeStyle = col; g.fillStyle = col; g.lineWidth = 3.5; g.setLineDash(dash ? [6, 5] : []);
+    g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2 - Math.cos(a) * 9, y2 - Math.sin(a) * 9); g.stroke(); g.setLineDash([]);
+    g.beginPath(); g.moveTo(x2, y2); g.lineTo(x2 - Math.cos(a - .45) * 11, y2 - Math.sin(a - .45) * 11); g.lineTo(x2 - Math.cos(a + .45) * 11, y2 - Math.sin(a + .45) * 11); g.closePath(); g.fill();
+  };
+  const fan = (cx, cy, a0, a1) => { g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, 70, a0, a1); g.closePath(); g.fillStyle = 'rgba(255,201,60,.22)'; g.fill(); };
+  const label = (x, y, t, c = '#fff') => { g.fillStyle = c; g.font = '700 12px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(t, x, y); };
+  if (rule === 'shot') {
+    g.strokeStyle = '#fff'; g.lineWidth = 4; g.strokeRect(60, 18, 160, 46);
+    dot(162, 50, 10, '#8a4dff'); arrow(150, 50, 176, 50, '#ffc93c'); label(163, 76, '기울었다!', '#ffc93c');
+    dot(140, 130, 7, '#fff'); arrow(140, 124, 74, 28); label(96, 96, '반대 구석!', '#7dffb0');
+    return;
+  }
+  if (rule === 'pass' || rule === 'both' || rule === 'whistle') {
+    me(140, 130); mate(70, 32, 7); mate(210, 32, 10); def(98, 72);
+    if (rule === 'both') { def(182, 72); mark(70, 12, false); mark(210, 12, false); arrow(140, 122, 140, 42); label(140, 30, '가운데 = 돌파!', '#7dffb0'); }
+    else if (rule === 'whistle') { label(140, 80, '🔔 휘슬 = 멈춤', '#ffc93c'); }
+    else { mark(70, 12, false); mark(210, 12, true); arrow(146, 124, 203, 44); }
+    return;
+  }
+  // 둘러보기 계열: 친구가 화면 밖 양옆에
+  me(140, 116); mate(28, 104, 7); mate(252, 98, 10); def(58, 108);
+  fan(140, 116, Math.PI * .92, Math.PI * 1.22); fan(140, 116, -Math.PI * .22, Math.PI * .08);
+  label(140, 136, '👀 꾹 = 그쪽 보기', '#ffc93c');
+  if (rule === 'switch') { def(222, 100); arrow(70, 92, 210, 86, '#ff8a7a', true); mark(28, 84, true); mark(252, 78, false); label(140, 66, '수비가 옮겨 붙었다!', '#ff8a7a'); return; }
+  mark(28, 84, false); mark(252, 78, true);
+  if (rule === 'blind') {
+    g.fillStyle = 'rgba(5,10,20,.88)'; g.fillRect(150, 8, 122, 52); label(211, 26, '공이 오면 화면 가림', '#a9b6d3'); label(211, 46, '기억으로 ✔ 쪽!', '#7dffb0');
+    arrow(150, 112, 236, 100, '#38d27a', true);
+  } else arrow(150, 112, 236, 100);
 }

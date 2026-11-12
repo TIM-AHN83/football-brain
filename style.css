@@ -105,6 +105,34 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .seg button{flex:1 1 auto;min-width:52px;min-height:40px;border:1px solid var(--line);background:rgba(244,246,251,.05);font:700 14px var(--body);padding:0 8px}
 .seg button.on{background:var(--sun);color:var(--ink);border-color:var(--sun)}
 /* ---------- 30초 따라 하기 · 베타 ---------- */
+/* ---------- 새 기술 카드 · 둘러보기 칩 (1.9) ---------- */
+.teach{position:absolute;inset:0;display:grid;place-items:center;padding:16px max(16px,var(--sr)) calc(var(--sb) + 16px) max(16px,var(--sl));background:rgba(5,10,20,.7);pointer-events:auto;z-index:6}
+.teach-box{width:100%;max-width:420px;max-height:100%;overflow:auto;display:grid;gap:10px;padding:16px;background:linear-gradient(180deg,var(--navy),var(--ink));border:1px solid var(--sun);box-shadow:0 12px 40px rgba(0,0,0,.5)}
+.teach-box>small{font:700 12px var(--body);letter-spacing:.12em;color:var(--sun)}
+.teach-box>b{font:400 30px/1.1 var(--display)}
+#teach-cv{width:100%;height:auto;aspect-ratio:280/150;border:1px solid var(--line)}
+#teach-how{margin:0;font:700 16px/1.55 var(--body)}
+#teach-how em{font-style:normal;color:var(--sun)}
+.teach-real{margin:0;padding:8px 10px;font-size:13px;line-height:1.55;background:rgba(56,210,122,.12);border-left:3px solid var(--good)}
+.scan-chip{position:absolute;top:40%;padding:10px 12px;font:800 14px/1.25 var(--body);text-align:center;background:rgba(11,20,40,.78);border:2px solid var(--sun);color:var(--sun);pointer-events:none}
+.scan-chip.left{left:max(6px,var(--sl))}
+.scan-chip.right{right:max(6px,var(--sr))}
+.scan-chip.seen{border-color:var(--good);color:var(--good);background:rgba(11,40,24,.8)}
+.scan-chip.nudge{animation:chipNudge 1s ease-in-out infinite}
+@keyframes chipNudge{50%{background:rgba(255,201,60,.9);color:var(--ink)}}
+/* 결과 화면: 버튼은 항상 아래에 */
+.result{padding-bottom:calc(var(--sb) + 92px)}
+.res-bar{position:fixed;left:0;right:0;bottom:0;z-index:22;display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px;
+  padding:14px max(16px,var(--sr)) calc(var(--sb) + 12px) max(16px,var(--sl));background:linear-gradient(180deg,rgba(11,20,40,0),var(--ink) 34%)}
+.res-bar .btn{min-height:54px}
+.res-bar .btn-primary{min-height:54px}
+.res-bi-line{font:700 14px var(--body);color:var(--mist)}
+.res-bi-line b{font:800 22px var(--num);color:var(--sun);margin:0 2px}
+.res-bi-line em{font-style:normal;color:var(--chalk)}
+.res-more{background:rgba(244,246,251,.03);border:1px solid var(--line);padding:8px 10px}
+.res-more summary{cursor:pointer;font:700 13px var(--body);color:var(--mist);padding:4px 0}
+.res-more[open] summary{margin-bottom:8px}
+.fb-link.center{justify-self:center;text-align:center}
 .more-fields{display:grid;gap:12px;padding:8px 12px;background:rgba(244,246,251,.04);border:1px solid var(--line)}
 .more-fields summary{cursor:pointer;font-weight:700;font-size:13px;color:var(--mist);padding:4px 0}
 .more-fields small{font-weight:400}

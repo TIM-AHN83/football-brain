@@ -4,9 +4,10 @@
 export const CENTER = [0.35, 0.65]; // 3칸일 때 가운데 칸 (화면 폭 비율)
 
 export class Gestures {
-  constructor(el, { onTap, onLook, onLookKey, onPause, zones, swipeMode, onSwipe }) {
+  constructor(el, { onTap, onLook, onLookKey, onPause, zones, swipeMode, onSwipe, holdMode, onHold }) {
     this.el = el; this.onTap = onTap; this.onLook = onLook; this.onLookKey = onLookKey; this.onPause = onPause;
     this.swipeMode = swipeMode || (() => false); this.onSwipe = onSwipe;
+    this.holdMode = holdMode || (() => false); this.onHold = onHold; // 1.9: 둘러보기 때 화면 한쪽을 꾹 = 그쪽 보기
     this.zones = zones || (() => 2); // 2 = 왼쪽·오른쪽 반반, 3 = 왼쪽·가운데·오른쪽
     this.dragPx = 26; this.enabled = false; this.down = null;
     el.addEventListener('pointerdown', e => this.pd(e));
@@ -28,9 +29,11 @@ export class Gestures {
     e.preventDefault();
     try { this.el.setPointerCapture(e.pointerId); } catch (err) { /* 무시 */ }
     this.down = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), moveT: null, drag: false, lastX: e.clientX, ...this.zoneAt(e.clientX) };
+    if (this.holdMode()) { this.down.hold = true; this.onHold && this.onHold(this.down.zone); } // 누르는 동안 그쪽을 본다
   }
   pm(e) {
     const d = this.down; if (!d || d.id !== e.pointerId) return;
+    if (d.hold) return; // 꾹 눌러 보는 중: 끌기로 둘러보지 않는다
     if (this.swipeMode()) { if (d.moveT == null && Math.hypot(e.clientX - d.x, e.clientY - d.y) > 8) d.moveT = performance.now(); return; } // 슛: 둘러보기 대신 쓸기
     if (!d.drag && Math.abs(e.clientX - d.x) > this.dragPx) d.drag = true;
     if (d.drag) { this.onLook(e.clientX - d.lastX); d.lastX = e.clientX; }
@@ -38,6 +41,7 @@ export class Gestures {
   pu(e, cancel) {
     const d = this.down; if (!d || d.id !== e.pointerId) return;
     this.down = null;
+    if (d.hold) { this.onHold && this.onHold(null); return; } // 손을 떼면 다시 앞을 본다 (패스로 치지 않는다)
     if (cancel) return;
     if (this.swipeMode()) {
       const dx = e.clientX - d.x, dy = e.clientY - d.y;
@@ -65,5 +69,5 @@ export class Gestures {
     const k = e.key.toLowerCase();
     if (k === 'q' || k === 'e') { this.keys.delete(k); this.onLookKey((this.keys.has('q') ? 1.3 : 0) - (this.keys.has('e') ? 1.3 : 0)); }
   }
-  reset() { this.down = null; }
+  reset() { if (this.down?.hold) this.onHold && this.onHold(null); this.down = null; }
 }

@@ -1,6 +1,6 @@
 // 배포 설정 — 공개 키(anon)만 넣는다. 랭킹 표는 supabase/fb_leaderboard.sql 로 만든다.
 export const CONFIG = {
-  version: '1.8.0 (2026-11-11)',
+  version: '1.9.0 (2026-11-12)',
   supabase: {
     url: 'https://ykqqizjjxzisankhjash.supabase.co',
     key: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrcXFpempqeHppc2Fua2hqYXNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI1NjIwOTQsImV4cCI6MjEwODEzODA5NH0.A248gIV1Agaq1HtXUEnG4ZETCLaktT7M9uA0HPHrGN0',

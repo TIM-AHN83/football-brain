@@ -170,15 +170,14 @@
 <section id="scr-howto" class="screen sheet-screen">
   <div class="sheet">
     <header class="sheet-head"><h2>하는 법</h2><button type="button" class="x-btn" data-close aria-label="닫기">✕</button></header>
+    <p class="sheet-lead">규칙은 딱 하나: <b>빈 친구에게 패스!</b> 레벨이 오를 때마다 새 기술이 하나씩 나오고, 처음엔 그림 카드와 연습 2번(틀려도 괜찮아요)으로 알려 줘요.</p>
     <ol class="howto">
-      <li><b>드리블하며 앞을 본다</b><span>폰을 들고 발을 움직이면 화면 속 내가 달려요. 노란 유니폼이 우리 팀이에요.</span></li>
-      <li><b>빨간 수비수가 번쩍!</b><span>멀리서 수비수가 아주 잠깐 보였다가 사라져요. 수비수가 막은 반대쪽으로 패스!</span></li>
-      <li><b>누른 자리로 패스</b>
-        <span class="keys"><em>화면 왼쪽</em> 왼쪽 패스 <em>화면 오른쪽</em> 오른쪽 패스 <em>화면 가운데</em> 양쪽 다 막혔을 때 드리블 돌파 (레벨 3부터)</span></li>
-      <li><b>외치면 보너스</b><span>"7번 패스!"처럼 받을 친구의 <u>등번호 + 패스</u>를 외쳐요. 진짜 경기의 콜플레이예요.</span></li>
-      <li><b>둘러보기 패스 (레벨 2부터)</b><span>앞 친구에게 공을 주고 돌려받기 전에 폰을 돌려(또는 화면을 끌어) 양옆 친구를 봐요. 공이 발에 오면 화면이 가려져요 — <u>기억으로</u> 수비가 안 붙은 친구 쪽을 눌러요. 받기 직전에 한 번 더 보면 보너스!</span></li>
-      <li><b>휘슬</b><span>휘슬이 울리면 아무것도 누르지 말고 멈춤! (레벨 5부터)</span></li>
-      <li><b>1:1 슛으로 마무리</b><span>골대 앞에서 공을 <u>골대 쪽으로 쓸어 올려</u> 차요. 쓸어 올린 방향으로 날아가고, 빠르게 쓸수록 세고 높게(너무 세면 크로스바 위로). 골키퍼는 가운데에서 버티다 가끔 한쪽으로 <u>무게를 실어요</u> — 그 순간 반대 구석으로! 골을 넣으면 레벨 업.</span></li>
+      <li><b>패스 (레벨 1)</b><span>빨간 수비수가 막은 친구 말고, <u>비어 있는 친구 쪽</u> 화면을 눌러요. ⚽ 경기에서: 수비 없는 친구에게 주면 안 뺏겨요.</span></li>
+      <li><b>둘러보기 (레벨 2)</b><span>공이 오기 전에 <u>화면 왼쪽·오른쪽을 꾹</u> 눌러 양옆을 봐요(폰을 돌려도 돼요). 머리 위 ✔ = 빈 친구, ✖ = 막힌 친구. ⚽ 경기에서: 공 받기 전에 고개 돌려 보기.</span></li>
+      <li><b>기억으로 패스 (레벨 3)</b><span>공이 오면 화면이 가려져요. 봐 둔 ✔ 친구 쪽을 눌러요. ⚽ 경기에서: 받는 순간엔 공을 보니까, 미리 봐 둔 그림으로 패스.</span></li>
+      <li><b>드리블 돌파 (레벨 4)</b><span>양쪽 친구가 다 막히면 <u>화면 가운데</u>. ⚽ 경기에서: 줄 곳이 없으면 공을 몰고 빈 공간으로.</span></li>
+      <li><b>1:1 슛 (매 공격 끝)</b><span>공을 골대 구석 쪽으로 <u>쓸어 올려요</u>. 빠를수록 세게! 골키퍼가 한쪽으로 기울면 반대 구석. 골을 넣으면 레벨 업.</span></li>
+      <li><b>외치면 보너스</b><span>"7번 패스!"처럼 받을 친구 등번호를 외쳐요. ⚽ 경기의 콜플레이예요.</span></li>
     </ol>
     <button type="button" id="btn-tut-again2" class="btn">▶ 30초 따라 하기 다시</button>
     <p class="fine">컴퓨터: ← 왼쪽 · → 오른쪽 · ↑ 가운데(돌파) · 마우스 끌기로 둘러보기 · 슛은 마우스로 위로 끌거나 ← ↑ → 키</p>
@@ -273,7 +272,19 @@
     <b id="tut-title"></b><small id="tut-text"></small>
   </div>
   <div class="tut-swipe" id="tut-swipe" hidden aria-hidden="true">👆</div>
-  <div class="fx-blind" id="fx-blind"><b>기억으로 패스!</b><small>수비가 안 붙은 친구 쪽을 눌러요</small></div>
+  <div class="fx-blind" id="fx-blind"><b>✔ 친구는 어느 쪽?</b><small>기억나는 쪽 화면을 눌러요</small></div>
+  <div class="scan-chip left" id="chip-l" hidden></div>
+  <div class="scan-chip right" id="chip-r" hidden></div>
+  <div class="teach" id="teach" hidden>
+    <div class="teach-box">
+      <small id="teach-tag">새 기술</small>
+      <b id="teach-title"></b>
+      <canvas id="teach-cv" width="560" height="300" aria-hidden="true"></canvas>
+      <p id="teach-how"></p>
+      <p class="teach-real" id="teach-real"></p>
+      <button type="button" id="teach-go" class="btn btn-primary"><span>해 볼게요!</span><small>처음 2번은 연습 · 틀려도 괜찮아요</small></button>
+    </div>
+  </div>
   <div class="scorebug">
     <div class="sb-brand">FB</div>
     <div class="sb-lv"><small>LV</small><b id="hud-level">1</b></div>
@@ -319,26 +330,31 @@
       <small id="res-mode">챌린지 결과</small>
       <div class="res-score" id="res-score">0</div>
       <div class="res-sub" id="res-sub">LV 1 · 정확도 0%</div>
+      <div class="res-bi-line">축구 두뇌 지수 <b id="res-bi2">0</b> <em id="res-grade2">—</em></div>
     </div>
-    <div class="res-body">
-      <div class="brain">
-        <canvas id="radar" width="320" height="320" aria-label="능력 그래프"></canvas>
-        <div class="brain-idx"><small>축구 두뇌 지수</small><b id="res-bi">0</b><em id="res-grade">—</em></div>
-      </div>
-      <dl class="stats" id="res-stats"></dl>
-      <p class="coach" id="res-coach"></p>
-    </div>
+    <dl class="stats key" id="res-key"></dl>
+    <p class="coach" id="res-coach"></p>
     <div class="res-actions">
       <div class="res-rank" id="res-rank" hidden></div>
       <button id="btn-submit" class="btn btn-primary" hidden><span>다시 등록하기</span></button>
       <p id="submit-msg" class="fine center"></p>
-      <a class="btn small fb-link" target="_blank" rel="noopener">💬 의견 보내기 (인스타 DM) · 시범 운영 중이에요</a>
-      <div class="btn-row">
-        <button id="btn-share" class="btn">결과 공유</button>
-        <button id="btn-again" class="btn">다시 도전</button>
-        <button id="btn-home" class="btn">처음으로</button>
-      </div>
     </div>
+    <details class="res-more">
+      <summary>자세히 보기 · 능력 그래프</summary>
+      <div class="res-body">
+        <div class="brain">
+          <canvas id="radar" width="320" height="320" aria-label="능력 그래프"></canvas>
+          <div class="brain-idx"><small>축구 두뇌 지수</small><b id="res-bi">0</b><em id="res-grade">—</em></div>
+        </div>
+        <dl class="stats" id="res-stats"></dl>
+      </div>
+    </details>
+    <a class="link-btn fb-link center" target="_blank" rel="noopener">💬 의견 보내기 (인스타 DM) · 시범 운영 중이에요</a>
+  </div>
+  <div class="res-bar">
+    <button id="btn-again" class="btn btn-primary"><span>다시 도전</span></button>
+    <button id="btn-home" class="btn">처음으로</button>
+    <button id="btn-share" class="btn">공유</button>
   </div>
 </section>
 
