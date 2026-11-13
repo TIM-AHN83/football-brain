@@ -209,11 +209,13 @@ export class Footballer {
   }
   moveTo(x, z, speed) { this.target.set(x, 0, z); if (speed) this.maxSpeed = speed; }
 
-  dive(side, dist = 2.4) { this.anim = { type: 'dive', t: 0, side, x0: this.pos.x, dist }; }
+  // 옆 방향(ax, az) = 지금 바라보는 쪽의 오른쪽. 정면(+z)을 보면 (1, 0) 이라 예전과 같다
+  latAxis() { const ry = this.group.rotation.y; return { ax: Math.cos(ry), az: -Math.sin(ry), x0: this.pos.x, z0: this.pos.z }; }
+  dive(side, dist = 2.4) { this.anim = { type: 'dive', t: 0, side, dist, ...this.latAxis() }; }
   tackle(dirX, dirZ, hold = 1.1) { this.anim = { type: 'tackle', t: 0, dx: dirX, dz: dirZ, hold }; }
   celebrate() { this.anim = { type: 'cheer', t: 0 }; }
   // 골키퍼: 한쪽으로 옆걸음·무게 싣기(hold 초 뒤 가운데로 돌아옴, null 이면 그대로) / 뛰어올라 잡기
-  shift(side, dist, hold = null) { this.anim = { type: 'shift', t: 0, side, dist, hold, x0: this.pos.x }; }
+  shift(side, dist, hold = null) { this.anim = { type: 'shift', t: 0, side, dist, hold, ...this.latAxis() }; }
   catchHigh(x = null) { this.anim = { type: 'catch', t: 0, x0: this.pos.x, x1: x }; }
 
   update(dt) {
@@ -267,7 +269,7 @@ export class Footballer {
     if (A.type !== 'tackle' && A.type !== 'shift') this.hips.position.y = 0.92;
     if (A.type === 'dive') {
       const k = Math.min(1, A.t / 0.45), e = 1 - (1 - k) ** 3;
-      this.pos.x = A.x0 + A.side * (A.dist ?? 2.4) * e;
+      this.pos.x = A.x0 + A.side * (A.dist ?? 2.4) * e * A.ax; this.pos.z = A.z0 + A.side * (A.dist ?? 2.4) * e * A.az;
       this.pos.y = Math.sin(k * Math.PI) * 0.35;
       this.group.rotation.z = -A.side * 1.25 * e;
       this.arms.forEach(a => { a.sh.rotation.x = 0; a.sh.rotation.z = (a.s) * (0.4 + 2.4 * e); a.el.rotation.x = 0; });
@@ -282,7 +284,7 @@ export class Footballer {
       if (A.t > (A.hold ?? 1.1)) { this.anim = null; this.group.rotation.x = 0; this.hips.position.y = 0.92; }
     } else if (A.type === 'shift') {
       const e = shiftAmount(A);
-      this.pos.x = A.x0 + A.side * A.dist * e; this.group.rotation.z = -A.side * 0.2 * e;
+      this.pos.x = A.x0 + A.side * A.dist * e * A.ax; this.pos.z = A.z0 + A.side * A.dist * e * A.az; this.group.rotation.z = -A.side * 0.2 * e;
       this.hips.position.y = 0.92 - 0.1 * e;
       this.arms.forEach(a => { a.sh.rotation.x = 0; a.sh.rotation.z = a.s * 0.9 * e; a.el.rotation.x = -0.3; });
       this.legs.forEach(l => { l.th.rotation.x = -0.4 * e; l.kn.rotation.x = 0.8 * e; });

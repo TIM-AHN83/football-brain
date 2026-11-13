@@ -45,7 +45,7 @@ export class World {
 
     this.buildLights(); this.buildSky(); this.buildGround(); this.buildPitchLines(); this.buildGoals();
     this.buildFences(); this.buildBoards(); this.buildDugouts(); this.buildStand(); this.buildFloodlights();
-    this.buildBall(); this.buildBoots();
+    this.buildBall(); this.buildBoots(); this.buildPressRing();
     this.setTimeOfDay('day');
     this.resize();
     this._tex = this.loadTextures();
@@ -494,6 +494,50 @@ export class World {
       this.rig.add(g); return g;
     });
   }
+  // ---------- 날씨 (2.1, 선수 레벨로 해금): 비 · 눈. 알갱이는 경기장에 고정, 카메라 둘레 상자 안에서 되풀이 ----------
+  setWeather(kind) {
+    const w = kind === 'rain' || kind === 'snow' ? kind : 'clear';
+    if (w === this.weather && (w === 'clear' || this.wx)) return;
+    this.weather = w;
+    if (this.wx) { this.scene.remove(this.wx); this.wx.geometry.dispose(); this.wx.material.dispose(); this.wx = null; }
+    if (w !== 'clear') {
+      const rain = w === 'rain', N = rain ? 1300 : 900, B = { x: 34, y: 14, z: 34 };
+      const seed = new Float32Array(N * 3), g = new THREE.BufferGeometry();
+      for (let i = 0; i < N; i++) { seed[i * 3] = (Math.random() - .5) * B.x; seed[i * 3 + 1] = Math.random() * B.y; seed[i * 3 + 2] = (Math.random() - .5) * B.z; }
+      g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(N * (rain ? 6 : 3)), 3));
+      const o = rain ? new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#c9d5e6', transparent: true, opacity: .42, depthWrite: false }))
+        : new THREE.Points(g, new THREE.PointsMaterial({ color: '#ffffff', size: .1, map: this.snowTex(), transparent: true, opacity: .95, depthWrite: false }));
+      o.frustumCulled = false; o.renderOrder = 3; o.userData = { seed, N, B, rain }; this.wx = o; this.scene.add(o); this.updateWeather(0);
+    }
+    this.applyTod();
+  }
+  snowTex() {
+    if (this._snow) return this._snow;
+    const c = document.createElement('canvas'); c.width = c.height = 32; const g = c.getContext('2d'), gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.5, 'rgba(255,255,255,.7)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+    return (this._snow = new THREE.CanvasTexture(c));
+  }
+  updateWeather(dt) {
+    const o = this.wx; if (!o) return;
+    const { seed, N, B, rain } = o.userData, a = o.geometry.attributes.position.array, p = this.rig.position, vy = rain ? 15 : 1.2;
+    const W = (v, L) => ((v + L / 2) % L + L) % L - L / 2;
+    for (let i = 0; i < N; i++) {
+      const j = i * 3; let y = seed[j + 1] - vy * dt; if (y < 0) y += B.y; seed[j + 1] = y;
+      if (!rain) seed[j] += Math.sin(this.time * .8 + i) * .35 * dt; // 눈은 살랑살랑
+      const x = p.x + W(seed[j] - p.x, B.x), z = p.z + W(seed[j + 2] - p.z, B.z);
+      if (rain) { const k = i * 6; a[k] = x; a[k + 1] = y; a[k + 2] = z; a[k + 3] = x + .03; a[k + 4] = y + .55; a[k + 5] = z; }
+      else { a[j] = x; a[j + 1] = y; a[j + 2] = z; }
+    }
+    o.geometry.attributes.position.needsUpdate = true;
+  }
+
+  // 2대1 벽 패스: 내 둘레 4.4m 노란 원 (수비가 들어오면 초록)
+  buildPressRing() {
+    const m = new THREE.Mesh(new THREE.RingGeometry(4.28, 4.5, 80).rotateX(-Math.PI / 2),
+      new THREE.MeshBasicMaterial({ color: '#ffc93c', transparent: true, opacity: .8, depthWrite: false, toneMapped: false, fog: false }));
+    m.position.y = .035; m.renderOrder = 2; m.visible = false; this.rig.add(m); this.pressRing = m;
+  }
+  setPressRing(state) { const m = this.pressRing; if (!m) return; m.visible = !!state; if (state) m.material.color.set(state === 'go' ? '#38d27a' : '#ffc93c'); }
   kickBoot(side, amount = 1) { const b = this.boots[side < 0 ? 0 : 1]; b.userData.kick = 1; b.userData.amt = amount; }
 
   // ---------- 시간대 ----------
@@ -529,6 +573,10 @@ export class World {
     u.fogCol.value.copy(f);
     this.scene.fog.near = T.fogN; this.scene.fog.far = T.fogF;
     this.renderer.toneMappingExposure = 1;
+    // 날씨 (2.1): 비는 어둡고 안개가 가깝게, 눈은 하얀 안개
+    if (this.weather === 'rain') { this.scene.fog.near *= .45; this.scene.fog.far *= .4; this.sun.intensity *= .4; this.renderer.toneMappingExposure = .84; f.lerp(new THREE.Color('#7d8794'), .5); }
+    else if (this.weather === 'snow') { this.scene.fog.near *= .5; this.scene.fog.far *= .5; this.sun.intensity *= .65; f.lerp(new THREE.Color('#e3e9f0'), .55); }
+    u.fogCol.value.copy(f);
     this.setFlood(T.flood);
     this.crowdMat.uniforms.uLight.value = T.crowd;
   }
@@ -586,6 +634,7 @@ export class World {
         b.rotation.x = -0.5 * k;
       } else b.position.lerp(u.base, Math.min(1, dt * 10));
     }
+    this.updateWeather(dt);
     this.ballShadow.position.x = this.ball.position.x; this.ballShadow.position.z = this.ball.position.z;
     const bh = this.ball.position.y; this.ballShadow.scale.setScalar(1 + bh * 0.6); this.ballShadow.material.opacity = Math.max(0.15, 1 - bh * 0.5);
   }

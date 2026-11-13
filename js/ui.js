@@ -1,6 +1,7 @@
 // 화면·HUD·결과 리포트·랭킹 표시
 import { AGE_LABEL } from './store.js';
-import { MISSIONS, BADGES, KITS, titleOf } from './career.js';
+import { MISSIONS, BADGES, KITS, WEATHERS, titleOf } from './career.js';
+import { WEEKLY_XP } from './events.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -22,6 +23,8 @@ const TEACH = {
   blind: { tag: '레벨 업 · 레벨 4', title: '기억으로 패스 🧠', how: '이제 공이 발에 오면 <em>화면이 가려져요</em>. 미리 봐 둔 <em>✔ 친구 쪽</em>을 눌러요.', real: '진짜 경기: 공을 받는 순간엔 공을 봐야 해요. 그래서 미리 봐 둔 그림으로 패스해요.' },
   both: { tag: '새 기술 · 레벨 5', title: '드리블 돌파 💨', how: '양쪽 친구가 <em>둘 다 막히고</em> 앞 친구도 없으면 줄 곳이 없어요. <em>화면 가운데</em> = 앞으로 치고 나가요.', real: '진짜 경기: 줄 곳이 없으면 억지로 패스하지 말고, 공을 몰고 빈 공간으로!' },
   switch: { tag: '레벨 업 · 레벨 6', title: '수비가 움직여요 🔄', how: '둘러보는 사이 수비가 <em>다른 친구에게 옮겨 붙을</em> 수 있어요. 공이 오기 직전에 <em>한 번 더</em> 봐요.', real: '진짜 경기: 잘하는 선수는 공 받기 직전에 마지막으로 한 번 더 봐요.' },
+  wall: { tag: '새 기술 · 레벨 7', title: '2대1 벽 패스 🧱', how: '수비가 나에게 달려와요. <em>노란 원 안에 들어오면</em> 옆의 벽 친구 쪽을 톡! 친구가 수비 뒤 공간으로 다시 내줘요 (2칸). 너무 빨리 주면 수비가 끊어요.', real: '진짜 경기: 수비가 붙는 순간 주고 뛰면 한 번에 제쳐요 (원투 패스).' },
+  thru: { tag: '새 기술 · 레벨 9', title: '스루패스 타이밍 ⏱', how: '↑ 친구에게 수비가 붙어 있어요. 친구가 <em>뛰어나가는 순간</em>(발밑 링이 초록) 가운데를 톡 (2칸)! 너무 빠르거나 늦으면 수비가 끊어요. 옆 친구는 언제나 안전 (1칸).', real: '진짜 경기: 공격수가 뛰는 순간에 맞춰 줘야 스루패스가 살아요.' },
   shot: { tag: '마무리', title: '1:1 슛 🥅', how: '공을 골대 <em>구석 쪽으로 쓸어 올려요</em>. 빠르게 쓸수록 세게! 골키퍼가 한쪽으로 기울면 <em>반대 구석</em>.', real: '진짜 경기: 골키퍼가 먼저 움직이면 반대쪽이 비어요.' },
   whistle: { tag: '훈련 규칙', title: '휘슬엔 멈춤 🔔', how: '휘슬이 울리면 <em>아무것도 누르지 말고</em> 기다려요.', real: '진짜 경기: 휘슬이 울리면 바로 멈춰요. 급할 때 멈추는 힘이 실수를 줄여요.' },
 };
@@ -269,6 +272,9 @@ export class UI {
     ];
     if (s.fwd && s.fwd[1]) cells.splice(1, 1, ['최고 선택', `${s.fwd[0]}<small>/${s.fwd[1]}</small>`]); // 전진 패스 상황에서 가장 좋은 길을 고른 수
     if (s.fastAttacks) cells.push(['⚡ 역습 찬스', `${s.fastAttacks}<small>번</small>`]);
+    if (s.wall && s.wall[1]) cells.push(['🧱 2대1', `${s.wall[0]}<small>/${s.wall[1]}</small>`]);
+    if (s.thru && s.thru[1]) cells.push(['⏱ 스루패스', `${s.thru[0]}<small>/${s.thru[1]}</small>`]);
+    if (s.eventBonus) cells.push(['🎉 주간 보너스', `+${s.eventBonus.toLocaleString('ko-KR')}`]);
     $('#res-stats').innerHTML = cells.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
     let weakest = null, wv = 2;
     for (const [k] of AXES) { const v = s.axes[k]; if (v != null && v < wv) { wv = v; weakest = k; } }
@@ -285,6 +291,8 @@ export class UI {
     c.doneNow.forEach(id => chips.push(`<span class="cchip">✅ ${esc(MISSIONS[id].t)} +${MISSIONS[id].xp}</span>`));
     c.newBadges.forEach(id => { const b = BADGES.find(b => b.id === id); if (b) chips.push(`<span class="cchip badge">${b.ico} 새 배지 · ${esc(b.name)}</span>`); });
     c.kitsNew.forEach(k => chips.push(`<span class="cchip up">👕 새 유니폼 · ${esc(k.name)}</span>`));
+    (c.weatherNew || []).forEach(w => chips.push(`<span class="cchip up">${w.ico} 새 날씨 · ${esc(w.name)}</span>`));
+    if (c.weeklyDone) chips.unshift(`<span class="cchip up">${c.week.ev.ico} 주간 미션 완료 +${WEEKLY_XP}</span>`);
     const done = c.mis.done.length;
     el.innerHTML = `<button type="button" class="cl-row" id="btn-res-career">
       <span class="cl-lv"><small>선수</small><b>${c.lv}</b></span>
@@ -295,7 +303,7 @@ export class UI {
   }
 
   // 내 성장 화면
-  renderCareerSheet(c, mis, streak, best, onKit) {
+  renderCareerSheet(c, mis, streak, best, onKit, wk, onWeather) {
     const need = 100 + 60 * (c.lv - 1), pct = Math.round(c.xp / need * 100);
     const misRows = mis.ids.map(id => { const M = MISSIONS[id], v = Math.min(M.need, mis.prog[id] || 0), ok = mis.done.includes(id);
       return `<li class="${ok ? 'ok' : ''}"><span class="mi">${ok ? '✅' : '🎯'}</span><span class="mt">${esc(M.t)}<small>${ok ? '완료' : `${v} / ${M.need}`}</small></span><span class="mx">+${M.xp} XP</span></li>`; }).join('');
@@ -303,19 +311,26 @@ export class UI {
       return `<li class="${on ? 'on' : ''}" title="${esc(b.how)}"><span>${on ? b.ico : '🔒'}</span><b>${esc(b.name)}</b><small>${esc(b.how)}</small></li>`; }).join('');
     const kits = KITS.map(k => { const open = c.lv >= k.lv, on = c.kit === k.id;
       return `<button type="button" class="kit ${on ? 'on' : ''}" data-kit="${k.id}" ${open ? '' : 'disabled'}><i style="background:${k.kit.shirt};border-color:${k.kit.trim}"></i>${esc(k.name)}<small>${open ? (on ? '입는 중' : '입기') : `선수 Lv ${k.lv}`}</small></button>`; }).join('');
-    const T = c.tot;
+    const T = c.tot, wm = wk.ev.mission, wv = Math.min(wm.need, wk.prog);
+    const week = `<div class="wk ${wk.done ? 'ok' : ''}"><b>${wk.ev.ico} 이번 주: ${esc(wk.ev.name)}</b><small>${esc(wk.ev.desc)} · 모두에게 똑같이 · ${wk.daysLeft}일 남음</small>
+      <span class="wk-m">${wk.done ? '✅' : '🎯'} ${esc(wm.t)} <em>${wk.done ? '완료' : `${wv} / ${wm.need}`} · +${WEEKLY_XP} XP</em></span><span class="xpbar"><i style="width:${Math.round(wv / wm.need * 100)}%"></i></span></div>`;
+    const wx = WEATHERS.map(w => { const open = c.lv >= w.lv, on = c.weather === w.id;
+      return `<button type="button" class="kit wx ${on ? 'on' : ''}" data-wx="${w.id}" ${open ? '' : 'disabled'}><i class="ico">${open ? w.ico : '🔒'}</i>${esc(w.name)}<small>${open ? (on ? '고름' : '고르기') : `선수 Lv ${w.lv}`}</small></button>`; }).join('');
     $('#career-body').innerHTML = `
       <div class="cs-head"><span class="cl-lv big"><small>선수</small><b>${c.lv}</b></span>
         <span class="cl-mid"><span class="cl-top"><b>${esc(titleOf(c.lv))}</b><em>${c.xp} / ${need} XP</em></span><span class="xpbar"><i style="width:${pct}%"></i></span>
         <small>${streak > 0 ? `🔥 ${streak}일 연속` : '오늘 한 판 하면 연속 출석 시작'} · 챌린지 최고 레벨 ${c.maxLv || '–'}</small></span></div>
+      ${week}
       <h3 class="cs-h">오늘의 미션 <small>하루에 3개 · 자정에 바뀌어요</small></h3><ul class="mis">${misRows}</ul>
       <h3 class="cs-h">배지 <small>${c.badges.length} / ${BADGES.length}</small></h3><ul class="badges">${badges}</ul>
       <h3 class="cs-h">유니폼 <small>우리 편 친구들 옷 색</small></h3><div class="kits">${kits}</div>
+      <h3 class="cs-h">경기장 날씨 <small>보기만 바뀌어요</small></h3><div class="kits">${wx}</div>
       <h3 class="cs-h">모두 합쳐서</h3>
       <dl class="stats"><div><dt>챌린지</dt><dd>${T.plays}<small>판</small></dd></div><div><dt>골</dt><dd>${T.goals}</dd></div><div><dt>↑ 전진 패스</dt><dd>${T.fwd}</dd></div>
         <div><dt>👀 둘러보기 패스</dt><dd>${T.scan}</dd></div><div><dt>역동작 골</dt><dd>${T.wrong}</dd></div><div><dt>최고 점수</dt><dd>${best ? best.score.toLocaleString('ko-KR') : '–'}</dd></div></dl>
       <p class="fine">경험치 = 점수 ÷ 40 + 미션 보상. 기록은 이 기기에 저장돼요.</p>`;
-    $('#career-body').querySelectorAll('.kit').forEach(b => b.addEventListener('click', () => onKit && onKit(b.dataset.kit)));
+    $('#career-body').querySelectorAll('.kit[data-kit]').forEach(b => b.addEventListener('click', () => onKit && onKit(b.dataset.kit)));
+    $('#career-body').querySelectorAll('.kit[data-wx]').forEach(b => b.addEventListener('click', () => onWeather && onWeather(b.dataset.wx)));
   }
 
   renderRanking(rows, me, emptyMsg, targets) {
@@ -382,6 +397,20 @@ function drawTeach(cv, rule) {
     g.strokeStyle = '#fff'; g.lineWidth = 4; g.strokeRect(60, 18, 160, 46);
     dot(162, 50, 10, '#8a4dff'); arrow(150, 50, 176, 50, '#ffc93c'); label(163, 76, '기울었다!', '#ffc93c');
     dot(140, 130, 7, '#fff'); arrow(140, 124, 74, 28); label(96, 96, '반대 구석!', '#7dffb0');
+    return;
+  }
+  if (rule === 'wall') { // 나에게 달려드는 수비 · 노란 원 · 옆 벽 친구 → 수비 뒤로 돌려받기
+    g.beginPath(); g.ellipse(120, 120, 62, 26, 0, 0, Math.PI * 2); g.strokeStyle = '#ffc93c'; g.lineWidth = 3; g.stroke();
+    me(120, 120); def(120, 92); mate(210, 96, 8);
+    arrow(128, 118, 198, 100); arrow(204, 86, 150, 30, '#38d27a', true); arrow(116, 112, 136, 40, '#ffffff', true);
+    label(60, 56, '원 안에 들어오면 톡!', '#ffc93c'); label(205, 28, '수비 뒤로 내줌', '#7dffb0');
+    return;
+  }
+  if (rule === 'thru') { // ↑ 친구에게 수비가 붙어 있다 → 뛰는 순간 가운데
+    me(140, 132); mate(46, 84, 7); mate(234, 84, 10); mate(160, 52, 9); def(156, 68);
+    dot(182, 42, 8, '#ffc93c'); g.strokeStyle = '#0b1428'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(182, 47); g.lineTo(182, 37); g.moveTo(178, 41); g.lineTo(182, 36); g.lineTo(186, 41); g.stroke();
+    arrow(160, 44, 166, 10, '#ffffff', true); arrow(141, 124, 170, 16);
+    label(96, 26, '뛰는 순간 가운데!', '#7dffb0'); label(46, 108, '옆 = 안전', '#a9b6d3'); label(234, 108, '옆 = 안전', '#a9b6d3');
     return;
   }
   if (rule === 'fwd') { // 양옆 친구 + ↑ 앞 친구. 앞길이 비면 가운데 = 앞으로 (초록), 막히면 빈 옆 (점선)

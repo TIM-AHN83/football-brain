@@ -20,7 +20,12 @@ export class AudioFX {
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
   setMode(m) { this.mode = m; if (this.master) this.master.gain.value = m === 'off' ? 0 : m === 'quiet' ? .4 : .9; }
-  setDuck(on) { this.duck = on ? .45 : 1; if (this.crowdGain) this.crowdGain.gain.setTargetAtTime(.36 * this.duck, this.ctx.currentTime, .4); }
+  setDuck(on) { this.duck = on ? .45 : 1; this.crowdLevel(this._ex ?? .3); }
+  // 관중 녹음(web/sfx/crowd.mp3)이 있으면 경기 분위기(0~1)에 따라 웅성거림 → 함성으로 커진다
+  crowdLevel(v) {
+    this._ex = v; if (!this.crowdGain || !this.ctx) return;
+    this.crowdGain.gain.setTargetAtTime((.22 + .38 * Math.min(1, v)) * this.duck, this.ctx.currentTime, .35);
+  }
 
   makeNoise(sec, pink) {
     const c = this.ctx, n = Math.floor(c.sampleRate * sec), b = c.createBuffer(1, n, c.sampleRate), d = b.getChannelData(0);

@@ -12,7 +12,8 @@ import { store, deviceId, getProfile, setProfile, getSettings, setSettings, addH
 import { startTestPanel } from './testpanel.js';
 import { loadPeople } from './people.js';
 import { ClubUI, getClub, cleanCode, renderClubRanking } from './club.js';
-import { load as loadCareer, todayMissions, streakNow, kitOf, setKitChoice, startLevelFor, setCont, applyRun, MISSIONS, titleOf, xpNeed } from './career.js';
+import { load as loadCareer, todayMissions, streakNow, kitOf, setKitChoice, startLevelFor, setCont, applyRun, MISSIONS, titleOf, xpNeed, weatherFor, setWeatherChoice, weekState } from './career.js';
+import { weekInfo } from './events.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -68,6 +69,7 @@ async function boot() {
   game = new Game({ world, ui, audio, sensors, opts: { voice: settings.voice, motion: settings.motion, gyro: settings.gyro } });
   game.onEnd = onEnd;
   game.setKit(kitOf().kit); // 선수 레벨로 해금한 유니폼 색
+  world.setWeather(weatherFor()); // 선수 레벨로 해금한 날씨
   game.onTutorialDone = (finished) => { // 따라 하기가 끝나면(또는 건너뛰면) 챌린지로 안내
     endSession(); store.set('tutDone', true); showTitle();
     if (finished) { game.setTaught('pass'); game.setTaught('shot'); } // 따라 하기에서 배운 기술은 카드를 다시 띄우지 않는다
@@ -115,6 +117,7 @@ function loop(now) {
   const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
   if (state === 'play' || state === 'paused') game.update(dt); else if (state !== 'boot') game.cinematic(dt, now / 1000);
   world.update(dt); world.render();
+  if ((perf.cx = (perf.cx || 0) + dt) > .25) { perf.cx = 0; audio?.crowdLevel(world.excite); } // 관중 녹음이 있으면 분위기 따라 크기
   // 느린 기기면 해상도를 자동으로 낮춘다
   if (settings.quality === 'auto' && state === 'play') {
     perf.sum += dt; perf.n++;
@@ -148,11 +151,15 @@ function renderCareerCard() {
   $('#cr-lv').textContent = c.lv;
   $('#cr-title').textContent = `오늘의 미션 ${mis.done.length}/3` + (st > 1 ? ` · 🔥 ${st}일 연속` : '');
   $('#cr-sub').textContent = next ? `다음: ${MISSIONS[next].t} · 선수 Lv ${c.lv} ${titleOf(c.lv)}` : `오늘 미션 끝! · 다음 레벨까지 ${xpNeed(c.lv) - c.xp} XP`;
+  const w = weekState(c), el = $('#event-line'); // 이번 주 이벤트 (월요일 0시에 바뀜)
+  el.hidden = false; el.textContent = `${w.ev.ico} 이번 주 ${w.ev.name} · ${w.ev.desc}${w.done ? ' · 주간 미션 완료 ✅' : ''}`;
 }
 function openCareer() {
   const c = loadCareer();
   ui.renderCareerSheet(c, todayMissions(c), streakNow(c), store.get('best', null), (id) => {
     if (setKitChoice(id)) { game.setKit(kitOf().kit); openCareer(); ui.toast('유니폼을 바꿨어요 · 친구들 옷 색이 바뀌어요'); }
+  }, weekState(c), (id) => {
+    if (setWeatherChoice(id)) { world.setWeather(weatherFor()); openCareer(); ui.toast(id === 'random' ? '판마다 날씨가 바뀌어요' : '경기장 날씨를 바꿨어요'); }
   });
   ui.open('scr-career');
 }
@@ -222,7 +229,7 @@ $('#btn-challenge').addEventListener('click', () => { if (!getProfile()) return 
 // ---------- 30초 따라 하기 (등록·권한 없이 바로) ----------
 function startTutorial() {
   audio.unlock(); ['scr-howto', 'scr-tutdone'].forEach(id => ui.close(id));
-  game.opts.voice = false; game.opts.motion = false; game.opts.gyro = false;
+  game.opts.voice = false; game.opts.motion = false; game.opts.gyro = false; game.event = null;
   ui.go('none'); game.endCinematic(); game.look.drag = 0; game.look.key = 0;
   lastMode = 'tutorial'; game.start('tutorial'); ui.mic(null);
   gestures.enabled = true; gestures.reset(); state = 'play';
@@ -259,6 +266,7 @@ async function kickoff() {
     ui.close('scr-setup'); ui.go('none');
     game.endCinematic(); game.look.drag = 0; game.look.key = 0;
     lastMode = setupMode;
+    game.event = weekInfo().ev.id; world.setWeather(weatherFor()); // 이번 주 이벤트 보너스 · 날씨 ('랜덤'이면 판마다)
     game.start(setupMode, { level: setupMode === 'challenge' ? challengeStart() : setupLevel });
     ui.mic(game.opts.voice ? 'live' : null);
     gestures.enabled = true; gestures.reset(); state = 'play';
@@ -392,7 +400,8 @@ async function loadRanking() {
   const res = await Board.top(period, age);
   if (rKind !== 'solo' || period !== rPeriod || age !== rAge) return; // 그사이 다른 탭을 눌렀으면 늦게 온 결과는 버린다
   if (res.ok) {
-    note.textContent = (rPeriod === 'week' ? '챌린지가 끝나면 자동으로 올라가요. 매주 월요일 0시(한국 시간)에 새로 시작, 한 사람당 최고 기록 1개.' : '역대 최고 기록. 한 사람당 1개.') + ' 🎯 = 코치 목표(실제 선수 아님).';
+    const ev = weekInfo().ev;
+    note.textContent = (rPeriod === 'week' ? `챌린지가 끝나면 자동으로 올라가요. 매주 월요일 0시(한국 시간)에 새로 시작, 한 사람당 최고 기록 1개. 이번 주: ${ev.ico} ${ev.name}(${ev.desc}).` : '역대 최고 기록. 한 사람당 1개.') + ' 🎯 = 코치 목표(실제 선수 아님).';
     ui.renderRanking(res.rows, me, '아직 이번 주 기록이 없어요. 코치 목표부터 넘어 보세요!', TARGETS);
   }
   else { note.textContent = res.error === 'not_ready' ? '온라인 랭킹을 준비하고 있어요. 지금은 "내 기록"만 볼 수 있어요.' : '인터넷 연결을 확인해 주세요.'; ui.renderRanking([], null, '랭킹을 불러오지 못했어요.'); }
@@ -460,7 +469,7 @@ async function demo(which) {
   } else if (which === 'tutorial') { startTutorial();
   } else if (which === 'play' || which === 'mot' || which === 'scan' || which === 'shoot') {
     if (!getProfile()) setProfile({ nick: '미리보기', age: 'u10', team: '', num: 7 });
-    ui.go('none'); game.endCinematic(); game.opts.voice = false;
+    ui.go('none'); game.endCinematic(); game.opts.voice = false; game.event = weekInfo().ev.id;
     game.forceShot = params.has('shot'); // 개발용: ?demo=play&shot (슛 장면으로 바로)
     game.start(which === 'play' ? 'challenge' : which, { level: lv });
     if (which === 'play') { game.level = lv; game.newAttack(true); }

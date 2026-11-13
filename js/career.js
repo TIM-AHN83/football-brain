@@ -1,6 +1,7 @@
 // 선수 성장 (2.0): 경험치·선수 레벨·칭호 · 오늘의 미션 3개 · 배지 12개 · 연속 출석 · 유니폼 색 해금 · 이어 하기
 // 모두 이 기기에 저장한다(fb1_career). 서버·랭킹은 건드리지 않는다.
 import { store } from './store.js';
+import { weekInfo, WEEKLY_XP } from './events.js';
 
 export const xpNeed = (lv) => 100 + 60 * (lv - 1); // 레벨 lv → lv+1 에 필요한 경험치
 const TITLES = [[1, '루키'], [3, '유망주'], [5, '주전'], [8, '에이스'], [11, '캡틴'], [15, '레전드']];
@@ -15,6 +16,14 @@ export const KITS = [
   { id: 'black', lv: 9, name: '검정·금', kit: { ...base, shirt: '#1d2027', trim: '#ffc93c', num: '#ffc93c', numStroke: '#3a2a00', shorts: '#1d2027', socks: '#1d2027', boots: '#ffc93c' } },
 ];
 
+// 경기장 날씨 (2.1): 선수 레벨로 해금. 보기만 바뀌고 판정은 같다
+export const WEATHERS = [
+  { id: 'clear', lv: 1, ico: '☀️', name: '맑음' },
+  { id: 'rain', lv: 4, ico: '🌧️', name: '비' },
+  { id: 'snow', lv: 7, ico: '❄️', name: '눈' },
+  { id: 'random', lv: 4, ico: '🎲', name: '랜덤' },
+];
+
 // 오늘의 미션: 첫째는 늘 쉬운 '챌린지 2판', 나머지 둘은 날짜로 정해진다(하루 동안 같음). minLv = 챌린지 최고 레벨이 이만큼은 돼야 나온다
 export const MISSIONS = {
   plays2:  { t: '챌린지 2판 하기', need: 2, xp: 30, get: s => s.mode === 'challenge' ? 1 : 0 },
@@ -26,6 +35,8 @@ export const MISSIONS = {
   level4:  { t: '한 판에 레벨 4까지', need: 4, xp: 50, get: s => s.mode === 'challenge' ? s.level : 0, max: true, minLv: 2 },
   streak6: { t: '연속 정답 6번', need: 6, xp: 40, get: s => s.bestStreak || 0, max: true },
   drill1:  { t: '훈련장 1번 끝내기', need: 1, xp: 30, get: s => s.mode !== 'challenge' ? 1 : 0 },
+  wall2:   { t: '🧱 2대1 벽 패스 2번', need: 2, xp: 50, get: s => s.wallPasses || 0, minLv: 7 },
+  thru1:   { t: '⏱ 스루패스 1번', need: 1, xp: 50, get: s => s.thruPasses || 0, minLv: 9 },
 };
 
 export const BADGES = [
@@ -54,7 +65,7 @@ export function load() {
     xp: c.xp || 0, lv: c.lv || 1, maxLv: c.maxLv || (store.get('best', null)?.level || 0),
     tot: Object.assign({ plays: 0, goals: 0, fwd: 0, scan: 0, wrong: 0, fast: 0 }, c.tot),
     badges: c.badges || [], drills: c.drills || [], days: c.days || { last: null, streak: 0 },
-    mis: c.mis || null, kit: c.kit || 'gold', cont: c.cont ?? true,
+    mis: c.mis || null, kit: c.kit || 'gold', cont: c.cont ?? true, weather: c.weather || 'clear', week: c.week || null,
   };
 }
 function save(c) { store.set('career', c); }
@@ -72,6 +83,13 @@ export function todayMissions(c = load()) {
 export function streakNow(c = load()) { return c.days.last === dayKey() || c.days.last === dayKey(-1) ? c.days.streak : 0; }
 export function kitOf(c = load()) { const k = KITS.find(k => k.id === c.kit && c.lv >= k.lv) || KITS[0]; return k; }
 export function setKitChoice(id) { const c = load(); const k = KITS.find(k => k.id === id); if (!k || c.lv < k.lv) return false; c.kit = id; save(c); return true; }
+export function setWeatherChoice(id) { const c = load(); const w = WEATHERS.find(w => w.id === id); if (!w || c.lv < w.lv) return false; c.weather = id; save(c); return true; }
+export function weatherFor(c = load()) { // 이번 판 날씨 ('랜덤'이면 열린 것 중 하나)
+  const open = WEATHERS.filter(w => w.id !== 'random' && c.lv >= w.lv).map(w => w.id);
+  const pick = WEATHERS.find(w => w.id === c.weather && c.lv >= w.lv)?.id || 'clear';
+  return pick === 'random' ? open[Math.floor(Math.random() * open.length)] : pick;
+}
+export function weekState(c = load()) { const w = weekInfo(); return { ...w, prog: c.week && c.week.key === w.key ? c.week.prog : 0, done: !!(c.week && c.week.key === w.key && c.week.done) }; }
 export function startLevelFor(c = load()) { return c.maxLv >= 4 ? c.maxLv - 2 : 1; } // 이어 하기: 최고 레벨 −2 (LV4 이상 해 본 사람)
 export function setCont(on) { const c = load(); c.cont = !!on; save(c); }
 
@@ -97,10 +115,16 @@ export function applyRun(sum) {
   earn('lv3', c.maxLv >= 3); earn('lv5', c.maxLv >= 5); earn('lv8', c.maxLv >= 8); earn('streak15', (sum.bestStreak || 0) >= 15);
   earn('drills', DRILLS.every(d => c.drills.includes(d))); earn('day3', c.days.streak >= 3); earn('day7', c.days.streak >= 7);
   // 경험치 = 점수 ÷ 40 (훈련장은 한 판 최대 100 — 챌린지가 중심) + 미션 보상
-  const base = Math.min(sum.mode === 'challenge' ? 1e9 : 100, Math.max(0, Math.round((sum.score || 0) / 40))), misXp = doneNow.reduce((a, id) => a + MISSIONS[id].xp, 0), gain = base + misXp;
+  // 주간 이벤트 미션 (한 주에 한 번 +150 XP)
+  const W = weekInfo(); if (!c.week || c.week.key !== W.key) c.week = { key: W.key, prog: 0, done: false };
+  let weeklyDone = false;
+  if (!c.week.done) { c.week.prog += W.ev.mission.get(sum) || 0; if (c.week.prog >= W.ev.mission.need) { c.week.done = true; weeklyDone = true; } }
+  const base = Math.min(sum.mode === 'challenge' ? 1e9 : 100, Math.max(0, Math.round((sum.score || 0) / 40)));
+  const misXp = doneNow.reduce((a, id) => a + MISSIONS[id].xp, 0) + (weeklyDone ? WEEKLY_XP : 0), gain = base + misXp;
   c.xp += gain;
   while (c.xp >= xpNeed(c.lv)) { c.xp -= xpNeed(c.lv); c.lv++; }
-  const kitsNew = KITS.filter(k => k.lv > lv0 && k.lv <= c.lv);
+  const kitsNew = KITS.filter(k => k.lv > lv0 && k.lv <= c.lv), weatherNew = WEATHERS.filter(w => w.id !== 'random' && w.lv > lv0 && w.lv <= c.lv);
   save(c);
-  return { gain, base, misXp, lv0, lv: c.lv, xp: c.xp, need: xpNeed(c.lv), title: titleOf(c.lv), doneNow, newBadges, kitsNew, streak: c.days.streak, mis: m };
+  return { gain, base, misXp, lv0, lv: c.lv, xp: c.xp, need: xpNeed(c.lv), title: titleOf(c.lv), doneNow, newBadges, kitsNew, weatherNew, streak: c.days.streak, mis: m,
+    weeklyDone, week: { ...W, prog: c.week.prog, done: c.week.done } };
 }

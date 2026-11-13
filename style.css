@@ -419,3 +419,13 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .attack i{width:14px}
 .attack i.new{animation:atkNew .6s ease-out}
 @keyframes atkNew{0%{transform:scaleY(2.4);background:var(--sun)}100%{transform:none}}
+
+/* ---------- 2.1 주간 이벤트 · 날씨 ---------- */
+.event-line{margin:6px 0 0;display:inline-block;justify-self:start;padding:6px 10px;font:700 12px/1.4 var(--body);color:var(--ink);background:var(--good);box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.wk{display:grid;gap:5px;padding:10px 12px;background:rgba(56,210,122,.1);border:1px solid rgba(56,210,122,.55)}
+.wk b{font:400 17px/1.2 var(--display)}
+.wk small{font-size:12px;color:var(--mist)}
+.wk-m{display:flex;justify-content:space-between;gap:8px;font-weight:700;font-size:13px}
+.wk-m em{font-style:normal;font:800 13px var(--num);color:var(--good);white-space:nowrap}
+.wk.ok{opacity:.8}
+.kit.wx .ico{width:auto;height:auto;border:0;font-style:normal;font-size:22px;line-height:28px}

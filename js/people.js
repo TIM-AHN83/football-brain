@@ -247,7 +247,7 @@ export class Person {
     if (A.type === 'dive') {
       const k = Math.min(1, A.t / 0.45), e = 1 - (1 - k) ** 3;
       only('jump'); this.mixer.update(dt);
-      o.pos.x = A.x0 + A.side * (A.dist ?? 2.4) * e;
+      o.pos.x = A.x0 + A.side * (A.dist ?? 2.4) * e * (A.ax ?? 1); o.pos.z = (A.z0 ?? o.pos.z) + A.side * (A.dist ?? 2.4) * e * (A.az ?? 0);
       o.pos.y = Math.sin(k * Math.PI) * 0.35;
       o.group.rotation.z = -A.side * 1.25 * e;
       this.bend('upperarm_l', 'z', (0.6 + 1.3 * e)); this.bend('upperarm_r', 'z', -(0.6 + 1.3 * e));
@@ -270,7 +270,7 @@ export class Person {
       // 골키퍼 옆걸음: 무릎을 굽혀 낮추고 팔을 벌린 채 한쪽으로 쏠린다
       const e = shiftAmount(A);
       only('idle'); this.mixer.update(dt);
-      o.pos.x = A.x0 + A.side * A.dist * e;
+      o.pos.x = A.x0 + A.side * A.dist * e * (A.ax ?? 1); o.pos.z = (A.z0 ?? o.pos.z) + A.side * A.dist * e * (A.az ?? 0);
       o.group.rotation.z = -A.side * 0.2 * e;
       this.root.position.y = -0.1 * e;
       this.bend('thigh_l', 'x', -0.45 * e); this.bend('thigh_r', 'x', -0.45 * e);
