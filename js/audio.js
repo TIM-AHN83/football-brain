@@ -1,7 +1,8 @@
-// 효과음: 전부 Web Audio로 직접 합성 (저작권 문제 없음)
-// web/sfx/<이름>.mp3 파일을 넣으면 합성음 대신 그 파일을 쓴다 (crowd, kick, whistle, cheer, groan, net)
+// 효과음: Web Audio로 직접 합성 (저작권 문제 없음)
+// web/sfx/<이름>.mp3 파일을 넣고 config.js 의 sfx 에 적으면 합성음 대신 그 파일을 쓴다 (crowd, crowdhi, kick, whistle, cheer, groan, net)
+// 2.2 (2026-11-13): 관중 배경 crowd(웅성거림 반복)·crowdhi(함성 반복)·골 환호 cheer 는 Envato Elements 녹음 (credits.csv)
 import { CONFIG } from './config.js';
-const FILES = (CONFIG.sfx || []).filter(n => ['crowd', 'kick', 'whistle', 'cheer', 'groan', 'net'].includes(n));
+const FILES = (CONFIG.sfx || []).filter(n => ['crowd', 'crowdhi', 'kick', 'whistle', 'cheer', 'groan', 'net'].includes(n));
 
 export class AudioFX {
   constructor() { this.ctx = null; this.mode = 'on'; this.buf = {}; this.duck = 1; }
@@ -21,10 +22,19 @@ export class AudioFX {
   }
   setMode(m) { this.mode = m; if (this.master) this.master.gain.value = m === 'off' ? 0 : m === 'quiet' ? .4 : .9; }
   setDuck(on) { this.duck = on ? .45 : 1; this.crowdLevel(this._ex ?? .3); }
-  // 관중 녹음(web/sfx/crowd.mp3)이 있으면 경기 분위기(0~1)에 따라 웅성거림 → 함성으로 커진다
+  // 관중 녹음: 경기 분위기(0~1)에 따라 웅성거림(crowd)은 조금, 함성(crowdhi)은 슛·골 때(0.5 넘을 때)만 커진다
   crowdLevel(v) {
     this._ex = v; if (!this.crowdGain || !this.ctx) return;
-    this.crowdGain.gain.setTargetAtTime((.22 + .38 * Math.min(1, v)) * this.duck, this.ctx.currentTime, .35);
+    const e = Math.min(1, Math.max(0, v)), t = this.ctx.currentTime, hi = Math.max(0, Math.min(1, (e - .5) / .5));
+    if (this.buf.crowdhi) {
+      this.crowdGain.gain.setTargetAtTime((.34 + .12 * e) * this.duck, t, .35);
+      this.crowdHiGain.gain.setTargetAtTime(.55 * hi * hi * (3 - 2 * hi) * this.duck, t, .25);
+    } else this.crowdGain.gain.setTargetAtTime((.22 + .38 * e) * this.duck, t, .35);
+  }
+  // 관중 소리는 경기 중에만 (처음 화면·결과 화면에서는 조용히)
+  crowdOn(on) {
+    this._crowdOn = on; if (!this.crowdBus || !this.ctx) return;
+    this.crowdBus.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, on ? .6 : .4);
   }
 
   makeNoise(sec, pink) {
@@ -43,7 +53,7 @@ export class AudioFX {
       try {
         const r = await fetch(`sfx/${f}.mp3`); if (!r.ok) continue;
         this.buf[f] = await this.ctx.decodeAudioData(await r.arrayBuffer());
-        if (f === 'crowd') this.startCrowd();
+        if (f === 'crowd' || f === 'crowdhi') this.startCrowd();
       } catch (e) { /* 파일 없음 → 합성음 */ }
     }
   }
@@ -56,13 +66,22 @@ export class AudioFX {
   src(buf, loop = false) { const s = this.ctx.createBufferSource(); s.buffer = buf; s.loop = loop; return s; }
   filt(type, f, Q = 1) { const b = this.ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = Q; return b; }
 
-  // 관중 배경: 실제 녹음 파일(web/sfx/crowd.mp3)이 있을 때만 튼다.
+  // 관중 배경: 실제 녹음 파일(web/sfx/crowd.mp3, crowdhi.mp3)이 있을 때만 튼다.
   // (예전에는 잡음을 걸러 만든 웅성거림을 계속 틀었는데, 크기가 오르내려 파도 소리처럼 들려서 2026-11-10 뺐다)
+  // 두 파일은 끝을 처음과 겹쳐 만든 반복용. mp3 앞뒤의 빈 틈(인코더 지연)은 loopStart/loopEnd 로 건너뛴다
   startCrowd() {
     const c = this.ctx; if (!c || !this.buf.crowd) return;
     if (this.crowdNodes) { this.crowdNodes.forEach(n => { try { n.stop(); } catch (e) { /* 이미 멈춤 */ } }); }
-    this.crowdGain = this.crowdGain || c.createGain(); this.crowdGain.gain.value = .36 * this.duck; this.crowdGain.connect(this.master);
-    const s = this.src(this.buf.crowd, true); s.connect(this.crowdGain); s.start(); this.crowdNodes = [s];
+    if (!this.crowdBus) { this.crowdBus = c.createGain(); this.crowdBus.gain.value = this._crowdOn ? 1 : 0; this.crowdBus.connect(this.master); }
+    this.crowdGain = this.crowdGain || c.createGain(); this.crowdGain.connect(this.crowdBus);
+    this.crowdHiGain = this.crowdHiGain || c.createGain(); this.crowdHiGain.gain.value = 0; this.crowdHiGain.connect(this.crowdBus);
+    this.crowdNodes = [];
+    for (const [name, g] of [['crowd', this.crowdGain], ['crowdhi', this.crowdHiGain]]) {
+      const b = this.buf[name]; if (!b) continue;
+      const s = this.src(b, true); s.loopStart = .06; s.loopEnd = Math.max(.2, b.duration - .06);
+      s.connect(g); s.start(0, .06); this.crowdNodes.push(s);
+    }
+    this.crowdLevel(this._ex ?? .3);
   }
 
   // 골 환호: 부모들의 '와!' (모음 '아' 울림통을 거친 목소리 여러 개, 잡음 없음)

@@ -228,7 +228,7 @@ $('#btn-challenge').addEventListener('click', () => { if (!getProfile()) return 
 
 // ---------- 30초 따라 하기 (등록·권한 없이 바로) ----------
 function startTutorial() {
-  audio.unlock(); ['scr-howto', 'scr-tutdone'].forEach(id => ui.close(id));
+  audio.unlock(); audio.crowdOn(true); ['scr-howto', 'scr-tutdone'].forEach(id => ui.close(id));
   game.opts.voice = false; game.opts.motion = false; game.opts.gyro = false; game.event = null;
   ui.go('none'); game.endCinematic(); game.look.drag = 0; game.look.key = 0;
   lastMode = 'tutorial'; game.start('tutorial'); ui.mic(null);
@@ -247,7 +247,7 @@ $('#btn-kickoff').addEventListener('click', kickoff);
 async function kickoff() {
   const btn = $('#btn-kickoff'); btn.disabled = true;
   try {
-    audio.unlock();
+    audio.unlock(); audio.crowdOn(true); // 관중 소리는 경기 중에만
     // 음성이 안 되는 브라우저(앱 안 등)에서 꺼진 스위치를 저장하면, 나중에 크롬으로 열어도 계속 꺼져 있게 된다 → 쓸 수 있을 때만 저장
     if (!PREVIEW) { if (voice.supported) settings.voice = $('#tg-voice').checked; settings.motion = $('#tg-motion').checked; settings.gyro = $('#tg-gyro').checked; setSettings(settings); }
     else { settings.voice = settings.motion = settings.gyro = false; }
@@ -278,7 +278,7 @@ function pauseGame() { if (state !== 'play') return; state = 'paused'; game.paus
 $('#btn-pause').addEventListener('click', pauseGame);
 $('#btn-resume').addEventListener('click', () => { ui.close('scr-pause'); game.pause(false); gestures.enabled = true; gestures.reset(); state = 'play'; });
 $('#btn-quit').addEventListener('click', () => { ui.close('scr-pause'); endSession(); game.quit(); showTitle(); });
-function endSession() { gestures.enabled = false; voice.stop(); audio.setDuck(false); ui.mic(null); try { wakeLock?.release(); } catch (e) { /* 무시 */ } wakeLock = null; }
+function endSession() { gestures.enabled = false; voice.stop(); audio.setDuck(false); audio.crowdOn(false); ui.mic(null); try { wakeLock?.release(); } catch (e) { /* 무시 */ } wakeLock = null; }
 
 // ---------- 결과 ----------
 function onEnd(sum) {
