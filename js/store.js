@@ -18,7 +18,7 @@ export function getProfile() { return store.get('profile', null); }
 export function setProfile(p) { store.set('profile', p); }
 export function getSettings() {
   // 2.0: 처음엔 손가락만. 음성 콜·발 센서·폰 돌리기는 킥오프 준비의 '더 재미있게 (선택)'에서 켠다
-  return Object.assign({ quality: 'auto', sound: 'on', tap: 280, voice: false, motion: false, gyro: false, dlevel: 1 }, store.get('settings', {}));
+  return Object.assign({ quality: 'auto', sound: 'on', amb: 'on', tap: 280, voice: false, motion: false, gyro: false, dlevel: 1 }, store.get('settings', {}));
 }
 export function setSettings(s) { store.set('settings', s); }
 export function addHistory(sum) {

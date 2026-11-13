@@ -76,7 +76,7 @@ async function boot() {
   progress(60, '선수 모델 불러오는 중…');
   await Promise.race([peopleP, new Promise(r => setTimeout(r, 12000))]); // 너무 느리면 단순 모델로 시작
   progress(80, '선수 입장 중…');
-  audio = new AudioFX(); audio.setMode(settings.sound);
+  audio = new AudioFX(); audio.setMode(settings.sound); audio.setAmbient(settings.amb);
   voice = new Voice({ inApp }); sensors = new Sensors();
   game = new Game({ world, ui, audio, sensors, opts: { voice: settings.voice, motion: settings.motion, gyro: settings.gyro } });
   game.onEnd = onEnd;
@@ -509,6 +509,7 @@ $('#btn-report-share').addEventListener('click', async () => {
 });
 seg('seg-quality', settings.quality, v => { settings.quality = v; setSettings(settings); ui.toast('다음에 게임을 열 때 적용돼요'); });
 seg('seg-sound', settings.sound, v => { settings.sound = v; setSettings(settings); audio.setMode(v); audio.unlock(); audio.ok(); });
+seg('seg-amb', settings.amb, v => { settings.amb = v; setSettings(settings); audio.setAmbient(v); audio.unlock(); audio.whistle(.3); }); // 관중·휘슬 소리 (바꾸면 휘슬로 들려 준다)
 // ---------- 마이크 확인 (시작 준비 화면·설정 화면 공통) ----------
 let micOut = null, micHeard = '', micTimer = null;
 async function micCheck(out, chromeBtn) {

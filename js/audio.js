@@ -5,7 +5,9 @@ import { CONFIG } from './config.js';
 const FILES = (CONFIG.sfx || []).filter(n => ['crowd', 'crowdhi', 'kick', 'whistle', 'cheer', 'groan', 'net'].includes(n));
 
 export class AudioFX {
-  constructor() { this.ctx = null; this.mode = 'on'; this.buf = {}; this.duck = 1; }
+  constructor() { this.ctx = null; this.mode = 'on'; this.buf = {}; this.duck = 1; this.amb = 1; }
+  // 2.4.1: 관중·휘슬 소리 따로 조절 (설정 '관중·휘슬 소리': 보통 1 · 작게 0.5 · 끄기 0). 사용자 의견: 함성·호루라기가 너무 크다
+  setAmbient(level) { this.amb = level === 'off' ? 0 : level === 'quiet' ? .5 : 1; if (this.crowdBus && this.ctx) this.crowdBus.gain.setTargetAtTime(this._crowdOn ? this.amb : 0, this.ctx.currentTime, .2); }
 
   unlock() {
     if (!this.ctx) {
@@ -26,15 +28,15 @@ export class AudioFX {
   crowdLevel(v) {
     this._ex = v; if (!this.crowdGain || !this.ctx) return;
     const e = Math.min(1, Math.max(0, v)), t = this.ctx.currentTime, hi = Math.max(0, Math.min(1, (e - .5) / .5));
-    if (this.buf.crowdhi) {
-      this.crowdGain.gain.setTargetAtTime((.34 + .12 * e) * this.duck, t, .35);
-      this.crowdHiGain.gain.setTargetAtTime(.55 * hi * hi * (3 - 2 * hi) * this.duck, t, .25);
-    } else this.crowdGain.gain.setTargetAtTime((.22 + .38 * e) * this.duck, t, .35);
+    if (this.buf.crowdhi) { // 2.4.1: 웅성거림 −3.8dB, 함성 −5.3dB
+      this.crowdGain.gain.setTargetAtTime((.22 + .08 * e) * this.duck, t, .35);
+      this.crowdHiGain.gain.setTargetAtTime(.3 * hi * hi * (3 - 2 * hi) * this.duck, t, .25);
+    } else this.crowdGain.gain.setTargetAtTime((.14 + .24 * e) * this.duck, t, .35);
   }
   // 관중 소리는 경기 중에만 (처음 화면·결과 화면에서는 조용히)
   crowdOn(on) {
     this._crowdOn = on; if (!this.crowdBus || !this.ctx) return;
-    this.crowdBus.gain.setTargetAtTime(on ? 1 : 0, this.ctx.currentTime, on ? .6 : .4);
+    this.crowdBus.gain.setTargetAtTime(on ? this.amb : 0, this.ctx.currentTime, on ? .6 : .4);
   }
 
   makeNoise(sec, pink) {
@@ -72,7 +74,7 @@ export class AudioFX {
   startCrowd() {
     const c = this.ctx; if (!c || !this.buf.crowd) return;
     if (this.crowdNodes) { this.crowdNodes.forEach(n => { try { n.stop(); } catch (e) { /* 이미 멈춤 */ } }); }
-    if (!this.crowdBus) { this.crowdBus = c.createGain(); this.crowdBus.gain.value = this._crowdOn ? 1 : 0; this.crowdBus.connect(this.master); }
+    if (!this.crowdBus) { this.crowdBus = c.createGain(); this.crowdBus.gain.value = this._crowdOn ? this.amb : 0; this.crowdBus.connect(this.master); }
     this.crowdGain = this.crowdGain || c.createGain(); this.crowdGain.connect(this.crowdBus);
     this.crowdHiGain = this.crowdHiGain || c.createGain(); this.crowdHiGain.gain.value = 0; this.crowdHiGain.connect(this.crowdBus);
     this.crowdNodes = [];
@@ -86,9 +88,9 @@ export class AudioFX {
 
   // 골 환호: 부모들의 '와!' (모음 '아' 울림통을 거친 목소리 여러 개, 잡음 없음)
   cheer(power = 1) {
-    if (!this.ctx) return; if (this.playBuf('cheer', .9 * power)) return;
+    if (!this.ctx || !this.amb) return; if (this.playBuf('cheer', .5 * power * this.amb)) return; // 2.4.1: 0.9 → 0.5 (−5dB)
     const c = this.ctx, t = c.currentTime;
-    const bus = c.createGain(); bus.gain.value = 6.6 * power; // 가장 큰 1초 RMS ≈ -18.5 dBFS (예전 환호 -17.3과 비슷하게), 피크 -1.8 이하
+    const bus = c.createGain(); bus.gain.value = 3.7 * power * this.amb; // 가장 큰 1초 RMS ≈ -18.5 dBFS (예전 환호 -17.3과 비슷하게), 피크 -1.8 이하
     // 모음 '아'의 울림(포먼트 800·1200·2600Hz)
     [[800, 6, 1], [1200, 7, .55], [2600, 9, .18]].forEach(([f, q, v]) => {
       const bp = this.filt('bandpass', f, q), g = c.createGain(); g.gain.value = v; bus.connect(bp); bp.connect(g); g.connect(this.master);
@@ -111,7 +113,7 @@ export class AudioFX {
     }
   }
   whistle(len = .4) {
-    if (!this.ctx) return; if (this.playBuf('whistle', .6)) return;
+    if (!this.ctx || !this.amb) return; if (this.playBuf('whistle', .35 * this.amb)) return;
     const c = this.ctx, t = c.currentTime;
     const o = c.createOscillator(), o2 = c.createOscillator(), trem = c.createOscillator(), tg = c.createGain(), g = c.createGain(), bp = this.filt('bandpass', 2900, 4);
     o.frequency.value = 2870; o2.frequency.value = 2930; trem.frequency.value = 34; tg.gain.value = .45;
@@ -119,7 +121,8 @@ export class AudioFX {
     trem.connect(tg); tg.connect(am.gain);
     o.connect(am); o2.connect(am); am.connect(bp); bp.connect(g); g.connect(this.master);
     const n = this.src(this.noise), nf = this.filt('bandpass', 3000, 6), ng = c.createGain(); ng.gain.value = .25; n.connect(nf); nf.connect(ng); ng.connect(g);
-    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(.19, t + .02); g.gain.setValueAtTime(.19, t + len); g.gain.exponentialRampToValueAtTime(.0001, t + len + .06);
+    const pk = .09 * this.amb; // 2.4.1: 0.19 → 0.09 (−6.5dB). 2.9kHz 휘슬은 휴대폰 스피커에서 특히 날카롭다
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(pk, t + .02); g.gain.setValueAtTime(pk, t + len); g.gain.exponentialRampToValueAtTime(.0001, t + len + .06);
     [o, o2, trem, n].forEach(x => { x.start(t); x.stop(t + len + .1); });
   }
   kick(p = 1) {
