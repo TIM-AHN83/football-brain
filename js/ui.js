@@ -1,5 +1,6 @@
 // 화면·HUD·결과 리포트·랭킹 표시
 import { AGE_LABEL } from './store.js';
+import { MISSIONS, BADGES, KITS, titleOf } from './career.js';
 
 const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -16,10 +17,11 @@ const TIPS = {
 // 새 기술 카드 (레벨에서 처음 나올 때 한 번): 제목 · 하는 법 · 진짜 경기에서
 const TEACH = {
   pass: { tag: '기본 기술', title: '빈 친구에게 패스', how: '빨간 수비수가 막은 친구 말고, <em>비어 있는 친구 쪽</em> 화면을 눌러요.', real: '진짜 경기: 수비가 없는 친구에게 주면 공을 뺏기지 않아요.' },
-  scan: { tag: '새 기술 · 레벨 2', title: '둘러보기 👀', how: '공이 오기 전에 <em>화면 왼쪽·오른쪽을 꾹</em> 눌러 양옆을 봐요 (폰을 돌려도 돼요). 머리 위 <em>✔ = 빈 친구</em>, ✖ = 막힌 친구. 공이 오면 ✔ 쪽을 톡!', real: '진짜 경기: 공 받기 전에 고개를 돌려 본 선수가 받자마자 좋은 패스를 해요.' },
-  blind: { tag: '레벨 업 · 레벨 3', title: '기억으로 패스 🧠', how: '이제 공이 발에 오면 <em>화면이 가려져요</em>. 미리 봐 둔 <em>✔ 친구 쪽</em>을 눌러요.', real: '진짜 경기: 공을 받는 순간엔 공을 봐야 해요. 그래서 미리 봐 둔 그림으로 패스해요.' },
-  both: { tag: '새 기술 · 레벨 4', title: '드리블 돌파 💨', how: '양쪽 친구가 <em>둘 다 막히면</em> 줄 곳이 없어요. <em>화면 가운데</em>를 눌러 앞으로 치고 나가요.', real: '진짜 경기: 줄 곳이 없으면 억지로 패스하지 말고, 공을 몰고 빈 공간으로!' },
-  switch: { tag: '레벨 업 · 레벨 5', title: '수비가 움직여요 🔄', how: '둘러보는 사이 수비가 <em>다른 친구에게 옮겨 붙을</em> 수 있어요. 공이 오기 직전에 <em>한 번 더</em> 봐요.', real: '진짜 경기: 잘하는 선수는 공 받기 직전에 마지막으로 한 번 더 봐요.' },
+  fwd: { tag: '새 기술 · 레벨 2', title: '전진 패스 ⬆', how: '<em>↑ 표시 친구</em>는 골대 쪽으로 뛰는 친구예요. 그 길이 비었으면 <em>화면 가운데</em> = 앞으로 패스 (공격이 2칸!). 막혔으면 빈 옆 친구에게 (1칸).', real: '진짜 경기: 옆으로만 돌리면 골이 멀어요. 앞이 열리면 앞으로!' },
+  scan: { tag: '새 기술 · 레벨 3', title: '둘러보기 👀', how: '공이 오기 전에 <em>화면 왼쪽·오른쪽을 꾹</em> 눌러 양옆을 봐요 (폰을 돌려도 돼요). 머리 위 <em>✔ = 빈 친구</em>, ✖ = 막힌 친구. 공이 오면 ✔ 쪽을 톡!', real: '진짜 경기: 공 받기 전에 고개를 돌려 본 선수가 받자마자 좋은 패스를 해요.' },
+  blind: { tag: '레벨 업 · 레벨 4', title: '기억으로 패스 🧠', how: '이제 공이 발에 오면 <em>화면이 가려져요</em>. 미리 봐 둔 <em>✔ 친구 쪽</em>을 눌러요.', real: '진짜 경기: 공을 받는 순간엔 공을 봐야 해요. 그래서 미리 봐 둔 그림으로 패스해요.' },
+  both: { tag: '새 기술 · 레벨 5', title: '드리블 돌파 💨', how: '양쪽 친구가 <em>둘 다 막히고</em> 앞 친구도 없으면 줄 곳이 없어요. <em>화면 가운데</em> = 앞으로 치고 나가요.', real: '진짜 경기: 줄 곳이 없으면 억지로 패스하지 말고, 공을 몰고 빈 공간으로!' },
+  switch: { tag: '레벨 업 · 레벨 6', title: '수비가 움직여요 🔄', how: '둘러보는 사이 수비가 <em>다른 친구에게 옮겨 붙을</em> 수 있어요. 공이 오기 직전에 <em>한 번 더</em> 봐요.', real: '진짜 경기: 잘하는 선수는 공 받기 직전에 마지막으로 한 번 더 봐요.' },
   shot: { tag: '마무리', title: '1:1 슛 🥅', how: '공을 골대 <em>구석 쪽으로 쓸어 올려요</em>. 빠르게 쓸수록 세게! 골키퍼가 한쪽으로 기울면 <em>반대 구석</em>.', real: '진짜 경기: 골키퍼가 먼저 움직이면 반대쪽이 비어요.' },
   whistle: { tag: '훈련 규칙', title: '휘슬엔 멈춤 🔔', how: '휘슬이 울리면 <em>아무것도 누르지 말고</em> 기다려요.', real: '진짜 경기: 휘슬이 울리면 바로 멈춰요. 급할 때 멈추는 힘이 실수를 줄여요.' },
 };
@@ -48,7 +50,8 @@ export class UI {
   setLives(n, max) { this.el.lives.innerHTML = max ? Array.from({ length: max }, (_, i) => `<i class="${i < n ? '' : 'lost'}"></i>`).join('') : ''; }
   attack(total, idx) {
     if (!total) { this.el.attack.innerHTML = ''; return; }
-    let h = ''; for (let i = 0; i < total; i++) h += `<i class="${i < idx ? 'done' : i === idx ? 'cur' : ''}"></i>`;
+    let h = ''; for (let i = 0; i < total; i++) h += `<i class="${i < idx ? 'done' + (i >= (this._atk ?? 0) ? ' new' : '') : i === idx ? 'cur' : ''}"></i>`;
+    this._atk = idx;
     h += `<i class="goal" style="${idx >= total ? 'background:var(--sun);border-color:var(--sun)' : ''}"></i>`;
     this.el.attack.innerHTML = h;
   }
@@ -88,7 +91,7 @@ export class UI {
     if (mode === 'shot') { h.className = 'hint z1 shot'; h.innerHTML = '<span data-z="S">↑ 골대 쪽으로 쓸어 올려 슛 · 빠르게 쓸수록 세고 높게</span>'; return; }
     h.className = 'hint z' + zones + (mode === 'shot' ? ' shot' : '');
     const cells = mode === 'shot' ? [['L', '← 왼쪽 슛'], ['C', '↑ 칩슛'], ['R', '오른쪽 슛 →']]
-      : zones === 3 ? [['L', '← 왼쪽 패스'], ['C', '↑ 돌파'], ['R', '오른쪽 패스 →']] : [['L', '← 왼쪽 패스'], ['R', '오른쪽 패스 →']];
+      : zones === 3 ? [['L', '← 왼쪽'], ['C', '↑ 앞으로'], ['R', '오른쪽 →']] : [['L', '← 왼쪽 패스'], ['R', '오른쪽 패스 →']];
     h.innerHTML = cells.map(([z, t]) => `<span data-z="${z}">${t}</span>`).join('');
   }
   // 누른 칸을 잠깐 밝힌다 (어느 칸이 눌렸는지 바로 보이게)
@@ -116,7 +119,10 @@ export class UI {
     $('#tut-title').textContent = S[0]; $('#tut-text').innerHTML = S[1];
     this.el.tutSwipe.hidden = step < 2;
   }
-  tutPulse(zone) { this.el.hint.querySelector(`[data-z="${zone}"]`)?.classList.add('pulse'); }
+  tutPulse(zone) { // 누를 칸 깜빡임 (null = 끄기)
+    this.el.hint.querySelectorAll('.pulse').forEach(e => e.classList.remove('pulse'));
+    if (zone) this.el.hint.querySelector(`[data-z="${zone}"]`)?.classList.add('pulse');
+  }
   // 새 기술 카드: 그림 + 하는 법 + 진짜 경기에서. onGo = '해 볼게요!' (null 이면 숨김)
   teach(rule, onGo) {
     const t = this.el.teach; if (!t) return;
@@ -245,7 +251,7 @@ export class UI {
     $('#res-bi').textContent = s.brainIndex; $('#res-grade').textContent = grade(s.brainIndex);
     $('#res-bi2').textContent = s.brainIndex; $('#res-grade2').textContent = grade(s.brainIndex);
     const key = [
-      ['평균 반응', s.avgRt ? `${s.avgRt}<small>ms</small>` : '–'],
+      s.fwd && s.fwd[1] ? ['↑ 전진 패스', `${s.fwdPasses}<small>번</small>`] : ['평균 반응', s.avgRt ? `${s.avgRt}<small>ms</small>` : '–'],
       s.mode === 'challenge' || s.mode === 'shoot' ? ['골', `${s.goals}<small>/${s.shots}</small>`] : s.mode === 'mot' ? ['등번호 기억', `${s.mot[0]}<small>/${s.mot[1]}</small>`] : ['맞힘', `${s.correct}<small>/${s.decisions}</small>`],
       ['둘러보기', s.scanRound && s.scanRound[1] ? `${s.scanRound[0]}<small>/${s.scanRound[1]}</small>` : `${s.scanPerMin}<small>/분</small>`],
     ];
@@ -261,16 +267,67 @@ export class UI {
         : ['멈춤 성공', s.whistle[1] ? `${s.whistle[0]}<small>/${s.whistle[1]}</small>` : '–'],
       ['발 움직임', s.feetOn ? `${s.stepsPerMin}<small>걸음/분</small>` : '<small>꺼짐</small>'],
     ];
+    if (s.fwd && s.fwd[1]) cells.splice(1, 1, ['최고 선택', `${s.fwd[0]}<small>/${s.fwd[1]}</small>`]); // 전진 패스 상황에서 가장 좋은 길을 고른 수
+    if (s.fastAttacks) cells.push(['⚡ 역습 찬스', `${s.fastAttacks}<small>번</small>`]);
     $('#res-stats').innerHTML = cells.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
     let weakest = null, wv = 2;
     for (const [k] of AXES) { const v = s.axes[k]; if (v != null && v < wv) { wv = v; weakest = k; } }
     $('#res-coach').innerHTML = `<b>코치 한마디</b> · ${esc(TIPS[weakest] || TIPS.judge)}`;
   }
 
-  renderRanking(rows, me, emptyMsg) {
+  // targets: 코치 목표 기록 (사람이 아님을 분명히: 🎯 줄) — 랭킹이 비어 보이지 않게, 다음 목표가 보이게
+  // 결과 화면: 선수 레벨·경험치 바 + 이번 판에 생긴 것 (미션 완료·새 배지·레벨 업·새 유니폼). 최대 3개만
+  renderCareerLine(c) {
+    const el = $('#res-career'); if (!el) return; el.hidden = !c; if (!c) return;
+    const pct = Math.round(c.xp / c.need * 100), up = c.lv > c.lv0;
+    const chips = [];
+    if (up) chips.push(`<span class="cchip up">레벨 업! Lv ${c.lv} ${esc(c.title)}</span>`);
+    c.doneNow.forEach(id => chips.push(`<span class="cchip">✅ ${esc(MISSIONS[id].t)} +${MISSIONS[id].xp}</span>`));
+    c.newBadges.forEach(id => { const b = BADGES.find(b => b.id === id); if (b) chips.push(`<span class="cchip badge">${b.ico} 새 배지 · ${esc(b.name)}</span>`); });
+    c.kitsNew.forEach(k => chips.push(`<span class="cchip up">👕 새 유니폼 · ${esc(k.name)}</span>`));
+    const done = c.mis.done.length;
+    el.innerHTML = `<button type="button" class="cl-row" id="btn-res-career">
+      <span class="cl-lv"><small>선수</small><b>${c.lv}</b></span>
+      <span class="cl-mid"><span class="cl-top"><b>${esc(c.title)}</b><em>+${c.gain} XP</em></span>
+        <span class="xpbar"><i style="width:${pct}%"></i></span>
+        <small>오늘의 미션 ${done}/3${c.streak > 1 ? ` · 🔥 ${c.streak}일 연속` : ''} · 내 성장 보기 ›</small></span></button>
+      ${chips.length ? `<div class="cchips">${chips.slice(0, 3).join('')}</div>` : ''}`;
+  }
+
+  // 내 성장 화면
+  renderCareerSheet(c, mis, streak, best, onKit) {
+    const need = 100 + 60 * (c.lv - 1), pct = Math.round(c.xp / need * 100);
+    const misRows = mis.ids.map(id => { const M = MISSIONS[id], v = Math.min(M.need, mis.prog[id] || 0), ok = mis.done.includes(id);
+      return `<li class="${ok ? 'ok' : ''}"><span class="mi">${ok ? '✅' : '🎯'}</span><span class="mt">${esc(M.t)}<small>${ok ? '완료' : `${v} / ${M.need}`}</small></span><span class="mx">+${M.xp} XP</span></li>`; }).join('');
+    const badges = BADGES.map(b => { const on = c.badges.includes(b.id);
+      return `<li class="${on ? 'on' : ''}" title="${esc(b.how)}"><span>${on ? b.ico : '🔒'}</span><b>${esc(b.name)}</b><small>${esc(b.how)}</small></li>`; }).join('');
+    const kits = KITS.map(k => { const open = c.lv >= k.lv, on = c.kit === k.id;
+      return `<button type="button" class="kit ${on ? 'on' : ''}" data-kit="${k.id}" ${open ? '' : 'disabled'}><i style="background:${k.kit.shirt};border-color:${k.kit.trim}"></i>${esc(k.name)}<small>${open ? (on ? '입는 중' : '입기') : `선수 Lv ${k.lv}`}</small></button>`; }).join('');
+    const T = c.tot;
+    $('#career-body').innerHTML = `
+      <div class="cs-head"><span class="cl-lv big"><small>선수</small><b>${c.lv}</b></span>
+        <span class="cl-mid"><span class="cl-top"><b>${esc(titleOf(c.lv))}</b><em>${c.xp} / ${need} XP</em></span><span class="xpbar"><i style="width:${pct}%"></i></span>
+        <small>${streak > 0 ? `🔥 ${streak}일 연속` : '오늘 한 판 하면 연속 출석 시작'} · 챌린지 최고 레벨 ${c.maxLv || '–'}</small></span></div>
+      <h3 class="cs-h">오늘의 미션 <small>하루에 3개 · 자정에 바뀌어요</small></h3><ul class="mis">${misRows}</ul>
+      <h3 class="cs-h">배지 <small>${c.badges.length} / ${BADGES.length}</small></h3><ul class="badges">${badges}</ul>
+      <h3 class="cs-h">유니폼 <small>우리 편 친구들 옷 색</small></h3><div class="kits">${kits}</div>
+      <h3 class="cs-h">모두 합쳐서</h3>
+      <dl class="stats"><div><dt>챌린지</dt><dd>${T.plays}<small>판</small></dd></div><div><dt>골</dt><dd>${T.goals}</dd></div><div><dt>↑ 전진 패스</dt><dd>${T.fwd}</dd></div>
+        <div><dt>👀 둘러보기 패스</dt><dd>${T.scan}</dd></div><div><dt>역동작 골</dt><dd>${T.wrong}</dd></div><div><dt>최고 점수</dt><dd>${best ? best.score.toLocaleString('ko-KR') : '–'}</dd></div></dl>
+      <p class="fine">경험치 = 점수 ÷ 40 + 미션 보상. 기록은 이 기기에 저장돼요.</p>`;
+    $('#career-body').querySelectorAll('.kit').forEach(b => b.addEventListener('click', () => onKit && onKit(b.dataset.kit)));
+  }
+
+  renderRanking(rows, me, emptyMsg, targets) {
     const list = $('#rank-list');
-    if (!rows || !rows.length) { list.innerHTML = `<li class="rank-empty" style="display:block">${esc(emptyMsg || '아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!')}</li>`; return; }
-    list.innerHTML = rows.map(r => `<li class="${me && r.nick === me ? 'me' : ''}">
+    const T = (targets || []).map(t => ({ ...t, target: true }));
+    if ((!rows || !rows.length) && !T.length) { list.innerHTML = `<li class="rank-empty" style="display:block">${esc(emptyMsg || '아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!')}</li>`; return; }
+    const all = [...(rows || []), ...T].sort((a, b) => b.score - a.score || (a.target ? 1 : -1));
+    const head = (!rows || !rows.length) ? `<li class="rank-empty" style="display:block">${esc(emptyMsg || '아직 기록이 없어요. 첫 번째 주인공이 되어 보세요!')}</li>` : '';
+    list.innerHTML = head + all.map(r => r.target ? `<li class="target">
+      <span class="r">🎯</span>
+      <span class="n"><b>코치 목표 · ${esc(r.name)}</b><small>${esc(r.hint)}</small></span>
+      <span class="s">${Number(r.score).toLocaleString('ko-KR')}<small>목표</small></span></li>` : `<li class="${me && r.nick === me ? 'me' : ''}">
       <span class="r">${r.rank}</span>
       <span class="n"><b>${esc(r.nick)}</b><small>${esc([AGE_LABEL[r.age_group] || '', r.team || ''].filter(Boolean).join(' · '))}${r.accuracy != null ? ` · 정확도 ${r.accuracy}%` : ''}</small></span>
       <span class="s">${Number(r.score).toLocaleString('ko-KR')}<small>LV ${r.level}${r.brain_index ? ` · 지수 ${r.brain_index}` : ''}</small></span></li>`).join('');
@@ -325,6 +382,14 @@ function drawTeach(cv, rule) {
     g.strokeStyle = '#fff'; g.lineWidth = 4; g.strokeRect(60, 18, 160, 46);
     dot(162, 50, 10, '#8a4dff'); arrow(150, 50, 176, 50, '#ffc93c'); label(163, 76, '기울었다!', '#ffc93c');
     dot(140, 130, 7, '#fff'); arrow(140, 124, 74, 28); label(96, 96, '반대 구석!', '#7dffb0');
+    return;
+  }
+  if (rule === 'fwd') { // 양옆 친구 + ↑ 앞 친구. 앞길이 비면 가운데 = 앞으로 (초록), 막히면 빈 옆 (점선)
+    me(140, 132); mate(58, 74, 7); mate(222, 74, 10); def(196, 96);
+    mate(156, 24, 9); dot(178, 14, 8, '#ffc93c'); g.strokeStyle = '#0b1428'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(178, 19); g.lineTo(178, 9); g.moveTo(174, 13); g.lineTo(178, 8); g.lineTo(182, 13); g.stroke();
+    arrow(141, 124, 154, 38); label(84, 26, '비었으면 ↑ 가운데!', '#7dffb0');
+    arrow(134, 126, 68, 82, '#a9b6d3', true); label(80, 112, '막히면 옆', '#a9b6d3');
+    mark(222, 54, false);
     return;
   }
   if (rule === 'pass' || rule === 'both' || rule === 'whistle') {

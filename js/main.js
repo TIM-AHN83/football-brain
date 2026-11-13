@@ -12,13 +12,14 @@ import { store, deviceId, getProfile, setProfile, getSettings, setSettings, addH
 import { startTestPanel } from './testpanel.js';
 import { loadPeople } from './people.js';
 import { ClubUI, getClub, cleanCode, renderClubRanking } from './club.js';
+import { load as loadCareer, todayMissions, streakNow, kitOf, setKitChoice, startLevelFor, setCont, applyRun, MISSIONS, titleOf, xpNeed } from './career.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 const ui = new UI();
 const settings = getSettings();
-// 1.1.0: 예전엔 앱 안 브라우저에서 꺼진 음성 콜이 저장돼 계속 꺼져 있었다 → 한 번 다시 켠다
-if (!store.get('mig_voice1', false)) { settings.voice = true; setSettings(settings); store.set('mig_voice1', true); }
+// 2.0: 조작 단순화 — 기존 사용자도 음성 콜·발 센서·폰 돌리기를 한 번 꺼 준다 (원하면 '더 재미있게'에서 다시 켬)
+if (!store.get('mig_v2', false)) { settings.voice = false; settings.motion = false; settings.gyro = false; setSettings(settings); store.set('mig_v2', true); store.set('mig_voice1', true); }
 const UA = navigator.userAgent;
 const isMobile = matchMedia('(pointer:coarse)').matches || /Android|iPhone|iPad/i.test(UA);
 const inApp = /Instagram|FBAN|FBAV|KAKAOTALK|NAVER\(inapp|Line\/|DaumApps|everytimeApp/i.test(UA);
@@ -66,6 +67,7 @@ async function boot() {
   voice = new Voice({ inApp }); sensors = new Sensors();
   game = new Game({ world, ui, audio, sensors, opts: { voice: settings.voice, motion: settings.motion, gyro: settings.gyro } });
   game.onEnd = onEnd;
+  game.setKit(kitOf().kit); // 선수 레벨로 해금한 유니폼 색
   game.onTutorialDone = (finished) => { // 따라 하기가 끝나면(또는 건너뛰면) 챌린지로 안내
     endSession(); store.set('tutDone', true); showTitle();
     if (finished) { game.setTaught('pass'); game.setTaught('shot'); } // 따라 하기에서 배운 기술은 카드를 다시 띄우지 않는다
@@ -126,7 +128,7 @@ function loop(now) {
 
 // ---------- 타이틀 ----------
 function showTitle() {
-  state = 'title'; ui.go('scr-title'); renderPlayerCard(); club.refreshCard();
+  state = 'title'; ui.go('scr-title'); renderPlayerCard(); club.refreshCard(); renderCareerCard();
   const first = !store.get('tutDone', false) && !store.get('history', []).length; // 처음 온 사람: 30초 따라 하기를 먼저
   $('#btn-tutorial').hidden = !first; $('#btn-challenge').classList.toggle('btn-primary', !first);
   if (store.get('pendingClub', '') && !inviteShown && !PREVIEW) { inviteShown = true; setTimeout(() => club.open(), 600); } // 초대 링크로 들어왔으면 클럽 화면을 연다
@@ -139,6 +141,23 @@ function renderPlayerCard() {
   $('#pc-nick').textContent = p?.nick || '선수 등록';
   $('#pc-sub').textContent = p ? [AGE_LABEL[p.age], p.team].filter(Boolean).join(' · ') : '닉네임·나이대를 정해 주세요';
 }
+
+// ---------- 내 성장 (선수 레벨·오늘의 미션·배지·유니폼) ----------
+function renderCareerCard() {
+  const c = loadCareer(), mis = todayMissions(c), st = streakNow(c), next = mis.ids.find(id => !mis.done.includes(id));
+  $('#cr-lv').textContent = c.lv;
+  $('#cr-title').textContent = `오늘의 미션 ${mis.done.length}/3` + (st > 1 ? ` · 🔥 ${st}일 연속` : '');
+  $('#cr-sub').textContent = next ? `다음: ${MISSIONS[next].t} · 선수 Lv ${c.lv} ${titleOf(c.lv)}` : `오늘 미션 끝! · 다음 레벨까지 ${xpNeed(c.lv) - c.xp} XP`;
+}
+function openCareer() {
+  const c = loadCareer();
+  ui.renderCareerSheet(c, todayMissions(c), streakNow(c), store.get('best', null), (id) => {
+    if (setKitChoice(id)) { game.setKit(kitOf().kit); openCareer(); ui.toast('유니폼을 바꿨어요 · 친구들 옷 색이 바뀌어요'); }
+  });
+  ui.open('scr-career');
+}
+$('#btn-career').addEventListener('click', openCareer);
+$('#res-career').addEventListener('click', (e) => { if (e.target.closest('#btn-res-career')) openCareer(); });
 
 // 시트 닫기 버튼
 $$('[data-close]').forEach(b => b.addEventListener('click', () => ui.close(b.closest('.screen').id)));
@@ -176,8 +195,13 @@ $('#profile-form').addEventListener('submit', (e) => {
 
 // ---------- 시작 준비 ----------
 let setupMode = 'challenge', setupLevel = 1;
+const startSeg = seg('seg-start', loadCareer().cont ? 'cont' : '1', v => setCont(v === 'cont'));
+const challengeStart = () => { const sl = startLevelFor(); return sl > 1 && loadCareer().cont ? sl : 1; }; // 이어 하기: 최고 레벨 −2
 function openSetup(mode, level = 1) {
   setupMode = mode; setupLevel = level;
+  const sl = startLevelFor(); $('#start-row').hidden = !(mode === 'challenge' && sl > 1);
+  $('#start-lv').textContent = sl; startSeg.set(loadCareer().cont ? 'cont' : '1');
+  $('#setup-opts').open = !!(settings.voice || settings.motion || settings.gyro);
   $('#setup-title').textContent = mode === 'challenge' ? '킥오프 준비' : `훈련 준비 · ${MODES[mode].title}`;
   $('#tg-voice').checked = settings.voice && voice.supported && !PREVIEW; $('#tg-voice').disabled = !voice.supported || PREVIEW;
   $('#tg-motion').checked = settings.motion && !PREVIEW; $('#tg-gyro').checked = settings.gyro && !PREVIEW;
@@ -235,7 +259,7 @@ async function kickoff() {
     ui.close('scr-setup'); ui.go('none');
     game.endCinematic(); game.look.drag = 0; game.look.key = 0;
     lastMode = setupMode;
-    game.start(setupMode, { level: setupMode === 'challenge' ? 1 : setupLevel });
+    game.start(setupMode, { level: setupMode === 'challenge' ? challengeStart() : setupLevel });
     ui.mic(game.opts.voice ? 'live' : null);
     gestures.enabled = true; gestures.reset(); state = 'play';
   } finally { btn.disabled = false; }
@@ -253,11 +277,14 @@ function onEnd(sum) {
   endSession(); lastSummary = sum; state = 'result';
   lastBest = addHistory(sum);
   ui.renderResult(sum); ui.go('scr-result');
+  try { ui.renderCareerLine(applyRun(sum)); } catch (e) { console.error(e); ui.renderCareerLine(null); } // 경험치·미션·배지
   $('#btn-submit').hidden = true; $('#btn-submit').disabled = false;
   $('#submit-msg').textContent = sum.ranked ? '' : '훈련장 기록은 랭킹에 들어가지 않아요.';
   renderResRank(null);
   $('#scr-result').scrollTop = 0;
-  if (sum.ranked) submitScore(); // 챌린지 기록은 개인 랭킹에 자동 등록 (클럽 회원이면 팀 점수에도 같이)
+  // 챌린지 기록은 개인 랭킹에 자동 등록 (클럽 회원이면 팀 점수에도 같이). 개발용 ?demo 화면은 실제 랭킹에 올리지 않는다
+  if (sum.ranked && params.get('demo')) { renderResRank({ err: '데모 화면 · 등록 안 함' }); $('#submit-msg').textContent = '개발용 데모 화면이라 랭킹에 올리지 않았어요.'; }
+  else if (sum.ranked) submitScore();
 }
 // 결과 화면의 개인 랭킹 · 팀 랭킹 두 칸 (누르면 그 랭킹을 연다)
 let lastBest = false;
@@ -324,6 +351,12 @@ $('#btn-info').addEventListener('click', () => ui.open('scr-info'));
 // ---------- 랭킹 ----------
 // 개인 랭킹(한 사람당 최고 기록 1개)과 팀 랭킹(클럽 팀 점수)을 나눠서 보여 준다. 챌린지 한 판은 둘 다에 들어간다.
 let rKind = 'solo', rPeriod = 'week', rAge = 'all';
+// 코치 목표 기록: 실제 선수가 아니라 '다음 목표'. 랭킹이 비어 보이지 않게 함께 보여 준다 (🎯 표시로 구분)
+const TARGETS = [
+  { name: '유망주', score: 3000, hint: '레벨 3까지 · 앞이 비면 ↑ 전진 패스' },
+  { name: '주전', score: 10000, hint: '레벨 5까지 · 둘러보고 기억으로 패스' },
+  { name: '국가대표', score: 25000, hint: '레벨 8까지 · ⚡ 역습 찬스로 골' },
+];
 const pSeg = seg('seg-period', rPeriod, v => { rPeriod = v; loadRanking(); });
 const kSeg = seg('seg-kind', rKind, v => { rKind = v; if (rKind === 'team' && rPeriod === 'me') { rPeriod = 'week'; pSeg.set('week'); } loadRanking(); });
 seg('seg-rage', rAge, v => { rAge = v; loadRanking(); });
@@ -358,7 +391,10 @@ async function loadRanking() {
   const period = rPeriod, age = rAge;
   const res = await Board.top(period, age);
   if (rKind !== 'solo' || period !== rPeriod || age !== rAge) return; // 그사이 다른 탭을 눌렀으면 늦게 온 결과는 버린다
-  if (res.ok) { note.textContent = rPeriod === 'week' ? '챌린지가 끝나면 자동으로 올라가요. 매주 월요일 0시(한국 시간)에 새로 시작, 한 사람당 최고 기록 1개.' : '역대 최고 기록. 한 사람당 1개.'; ui.renderRanking(res.rows, me); }
+  if (res.ok) {
+    note.textContent = (rPeriod === 'week' ? '챌린지가 끝나면 자동으로 올라가요. 매주 월요일 0시(한국 시간)에 새로 시작, 한 사람당 최고 기록 1개.' : '역대 최고 기록. 한 사람당 1개.') + ' 🎯 = 코치 목표(실제 선수 아님).';
+    ui.renderRanking(res.rows, me, '아직 이번 주 기록이 없어요. 코치 목표부터 넘어 보세요!', TARGETS);
+  }
   else { note.textContent = res.error === 'not_ready' ? '온라인 랭킹을 준비하고 있어요. 지금은 "내 기록"만 볼 수 있어요.' : '인터넷 연결을 확인해 주세요.'; ui.renderRanking([], null, '랭킹을 불러오지 못했어요.'); }
 }
 void pSeg;
@@ -429,6 +465,7 @@ async function demo(which) {
     game.start(which === 'play' ? 'challenge' : which, { level: lv });
     if (which === 'play') { game.level = lv; game.newAttack(true); }
     gestures.enabled = true; state = 'play';
+  } else if (which === 'career') { openCareer();
   } else if (['howto', 'drills', 'ranking', 'settings', 'setup', 'profile', 'info'].includes(which)) {
     if (which === 'setup') openSetup('challenge'); else if (which === 'profile') openProfile(); else if (which === 'ranking') openRanking(params.get('kind') || 'solo'); else ui.open('scr-' + which);
   }

@@ -40,16 +40,17 @@ function geos() {
   };
   return G;
 }
-// 둘러보기: 머리 위 ✔(빈 친구) / ✖(수비가 붙은 친구) 표시 그림
+// 머리 위 표시: ✔(빈 친구) / ✖(수비가 붙은 친구) / ↑(앞으로 뛰는 친구, 전진 패스)
 let MARKS = null;
 function markTex(kind) {
   MARKS = MARKS || {};
   if (MARKS[kind]) return MARKS[kind];
   const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
-  g.beginPath(); g.arc(64, 64, 56, 0, Math.PI * 2); g.fillStyle = kind === 'ok' ? '#2fbf6a' : '#e8402f'; g.fill();
+  g.beginPath(); g.arc(64, 64, 56, 0, Math.PI * 2); g.fillStyle = kind === 'ok' ? '#2fbf6a' : kind === 'fwd' ? '#ffc93c' : '#e8402f'; g.fill();
   g.lineWidth = 8; g.strokeStyle = '#ffffff'; g.stroke();
   g.lineWidth = 15; g.lineCap = 'round'; g.lineJoin = 'round'; g.beginPath();
-  if (kind === 'ok') { g.moveTo(36, 66); g.lineTo(56, 86); g.lineTo(92, 44); } else { g.moveTo(44, 44); g.lineTo(84, 84); g.moveTo(84, 44); g.lineTo(44, 84); }
+  if (kind === 'fwd') { g.strokeStyle = '#0b1428'; g.moveTo(64, 98); g.lineTo(64, 34); g.moveTo(38, 58); g.lineTo(64, 32); g.lineTo(90, 58); }
+  else if (kind === 'ok') { g.moveTo(36, 66); g.lineTo(56, 86); g.lineTo(92, 44); } else { g.moveTo(44, 44); g.lineTo(84, 84); g.moveTo(84, 44); g.lineTo(44, 84); }
   g.stroke();
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
   return (MARKS[kind] = t);
@@ -167,12 +168,22 @@ export class Footballer {
     if (this.person) { this.person.setBlank(on); return; }
     const S = shared();
     if (on) {
-      if (!S.blank[this.kitName]) S.blank[this.kitName] = TX.jersey(this.kit, null, { blank: true });
-      this._numMap = this.mShirt.map; this.mShirt.map = S.blank[this.kitName];
+      const bk = this.kitName + this.kit.shirt; // 유니폼 색이 바뀌면 다른 그림
+      if (!S.blank[bk]) S.blank[bk] = TX.jersey(this.kit, null, { blank: true });
+      this._numMap = this.mShirt.map; this.mShirt.map = S.blank[bk];
     } else if (this._numMap) { this.mShirt.map = this._numMap; }
     this.mShirt.needsUpdate = true;
   }
   showBadge(on) { this.badge.visible = on; }
+  setKit(kit) { // 유니폼 색 바꾸기 (우리 편, 선수 레벨로 해금)
+    this.kit = kit;
+    if (this.person) this.person.setKit(kit);
+    else {
+      this.mShirt.map?.dispose(); this.mShirt.map = TX.jersey(kit, this.number); this.mShirt.needsUpdate = true; this._blank = false;
+      this.mSleeve.color.set(kit.shirt); this.mShorts.color.set(kit.shorts); this.mSocks.color.set(kit.socks); this.mBoots.color.set(kit.boots);
+    }
+    this.badgeMat.map?.dispose(); this.badgeMat.map = TX.badge(this.number, kit.ring, this.badgeFg); this.badgeMat.needsUpdate = true;
+  }
   setMark(kind) { // null | 'ok' | 'no' — 화면 크기 고정, 등번호 배지 위
     if (!kind && !this.mark) return;
     if (!this.mark) {

@@ -193,6 +193,12 @@ export class Person {
     u.uNumTex.value?.dispose(); u.uNumTex.value = numberTexture(n, this.kit);
   }
   setBlank(on) { this.mat.userData.u.uNumOn.value = on ? 0 : 1; }
+  setKit(kit) {
+    this.kit = kit; const u = this.mat.userData.u;
+    u.uShirt.value.set(kit.shirt); u.uTrim.value.set(kit.trim); u.uShorts.value.set(kit.shorts);
+    u.uSocks.value.set(kit.socks); u.uBoots.value.set(kit.boots);
+    this.setNumber(this.owner.number);
+  }
   glow(amount) { this.mat.userData.u.uGlow.value.set(this.kit.shirt).multiplyScalar(amount); }
 
   // 속도에 맞춰 서기 → 걷기 → 조깅 → 전력질주를 섞는다

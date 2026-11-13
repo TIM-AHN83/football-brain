@@ -97,6 +97,11 @@
       <span class="pc-text"><b id="cc-name">클럽 대항전</b><small id="cc-sub">팀을 만들어 함께 점수를 모아요 · 매주 트로피</small></span>
       <span class="pc-edit">열기</span>
     </button>
+    <button id="btn-career" class="player-card career-card">
+      <span class="pc-num cr-lv" id="cr-lv" aria-label="선수 레벨">1</span>
+      <span class="pc-text"><b id="cr-title">오늘의 미션 0/3</b><small id="cr-sub">선수 Lv 1 루키</small></span>
+      <span class="pc-edit">내 성장</span>
+    </button>
     <button id="btn-tutorial" class="btn btn-primary" hidden><span>▶ 30초 따라 하기</span><small>처음이라면 여기부터 · 등록 없이 바로</small></button>
     <button id="btn-challenge" class="btn btn-primary"><span>챌린지 시작</span><small>목숨 3개 · 랭킹 도전</small></button>
     <div class="btn-row">
@@ -138,8 +143,12 @@
 <section id="scr-setup" class="screen sheet-screen">
   <div class="sheet">
     <header class="sheet-head"><h2 id="setup-title">킥오프 준비</h2><button type="button" class="x-btn" data-close aria-label="닫기">✕</button></header>
+    <p class="sheet-lead">손가락만으로 해요: <b>톡</b> = 패스 · <b>꾹</b> = 둘러보기 · <b>쓸어 올리기</b> = 슛</p>
+    <div class="field" id="start-row" hidden><span>시작 레벨</span>
+      <div class="seg" id="seg-start"><button type="button" data-v="cont">LV<b id="start-lv">4</b>부터 이어 하기</button><button type="button" data-v="1">LV1부터</button></div></div>
+    <details class="more-fields opts" id="setup-opts"><summary>더 재미있게 (선택) · 음성 콜 · 발 센서 · 폰 돌리기</summary>
     <div class="safety">
-      <b>안전 먼저</b>
+      <b>걸으면서 할 때는 안전 먼저</b>
       <ul>
         <li>넓고 평평한 곳에서, 주변 3m 안에 사람·물건이 없게</li>
         <li>휴대폰은 한 손으로 가슴 높이에 꼭 쥐기 (손목 줄 추천)</li>
@@ -147,16 +156,17 @@
       </ul>
     </div>
     <div class="toggles">
-      <label class="tog"><input type="checkbox" id="tg-voice" checked><span class="tog-ui"></span>
+      <label class="tog"><input type="checkbox" id="tg-voice"><span class="tog-ui"></span>
         <span class="tog-text"><b>음성 콜</b><small>"7번 패스!" 외치면 보너스 · 마이크 사용</small></span></label>
       <div class="mic-check" id="mic-check"><button type="button" id="btn-miccheck" class="btn small">🎙 마이크 확인</button>
         <span id="miccheck-out" class="mic-check-out">처음이라면 눌러서 "10번 패스!"라고 말해 보세요</span>
         <a id="btn-openchrome" class="btn small" hidden>크롬으로 열기</a></div>
-      <label class="tog"><input type="checkbox" id="tg-motion" checked><span class="tog-ui"></span>
+      <label class="tog"><input type="checkbox" id="tg-motion"><span class="tog-ui"></span>
         <span class="tog-text"><b>발 움직임 센서</b><small>발을 움직여야 앞으로 달려요</small></span></label>
-      <label class="tog"><input type="checkbox" id="tg-gyro" checked><span class="tog-ui"></span>
-        <span class="tog-text"><b>폰 돌려서 둘러보기</b><small>공 받기 전에 폰을 좌우로 돌려 둘러봐요 (끄면 화면 끌기)</small></span></label>
+      <label class="tog"><input type="checkbox" id="tg-gyro"><span class="tog-ui"></span>
+        <span class="tog-text"><b>폰 돌려서 둘러보기</b><small>공 받기 전에 폰을 좌우로 돌려 둘러봐요 (끄면 화면 꾹·끌기)</small></span></label>
     </div>
+    </details>
     <p id="setup-warn" class="warn" hidden></p>
     <div class="code-row" id="code-row" hidden>
       <label class="field"><span>챌린지 코드 <small>(인스타 DM으로 받은 코드)</small></span>
@@ -170,14 +180,15 @@
 <section id="scr-howto" class="screen sheet-screen">
   <div class="sheet">
     <header class="sheet-head"><h2>하는 법</h2><button type="button" class="x-btn" data-close aria-label="닫기">✕</button></header>
-    <p class="sheet-lead">규칙은 딱 하나: <b>빈 친구에게 패스!</b> 레벨이 오를 때마다 새 기술이 하나씩 나오고, 처음엔 그림 카드와 연습 2번(틀려도 괜찮아요)으로 알려 줘요.</p>
+    <p class="sheet-lead">규칙은 딱 하나: <b>가장 좋은 빈 길로 공을 보내요!</b> 화면은 <b>왼쪽 · 가운데(앞으로) · 오른쪽</b>. 레벨이 오를 때마다 새 기술이 하나씩 나오고, 처음엔 그림 카드와 연습 2번(틀려도 괜찮아요)으로 알려 줘요.</p>
     <ol class="howto">
       <li><b>패스 (레벨 1)</b><span>빨간 수비수가 막은 친구 말고, <u>비어 있는 친구 쪽</u> 화면을 눌러요. ⚽ 경기에서: 수비 없는 친구에게 주면 안 뺏겨요.</span></li>
-      <li><b>둘러보기 (레벨 2)</b><span>공이 오기 전에 <u>화면 왼쪽·오른쪽을 꾹</u> 눌러 양옆을 봐요(폰을 돌려도 돼요). 머리 위 ✔ = 빈 친구, ✖ = 막힌 친구. ⚽ 경기에서: 공 받기 전에 고개 돌려 보기.</span></li>
-      <li><b>기억으로 패스 (레벨 3)</b><span>공이 오면 화면이 가려져요. 봐 둔 ✔ 친구 쪽을 눌러요. ⚽ 경기에서: 받는 순간엔 공을 보니까, 미리 봐 둔 그림으로 패스.</span></li>
-      <li><b>드리블 돌파 (레벨 4)</b><span>양쪽 친구가 다 막히면 <u>화면 가운데</u>. ⚽ 경기에서: 줄 곳이 없으면 공을 몰고 빈 공간으로.</span></li>
-      <li><b>1:1 슛 (매 공격 끝)</b><span>공을 골대 구석 쪽으로 <u>쓸어 올려요</u>. 빠를수록 세게! 골키퍼가 한쪽으로 기울면 반대 구석. 골을 넣으면 레벨 업.</span></li>
-      <li><b>외치면 보너스</b><span>"7번 패스!"처럼 받을 친구 등번호를 외쳐요. ⚽ 경기의 콜플레이예요.</span></li>
+      <li><b>↑ 전진 패스 (레벨 2)</b><span>머리 위 ↑ 친구는 골대 쪽으로 뛰어요. 그 길이 비었으면 <u>화면 가운데</u> = 앞으로(공격 2칸!), 막혔으면 빈 옆 친구(1칸). ⚽ 경기에서: 앞이 열리면 앞으로!</span></li>
+      <li><b>둘러보기 (레벨 3)</b><span>공이 오기 전에 <u>화면 왼쪽·오른쪽을 꾹</u> 눌러 양옆을 봐요. 머리 위 ✔ = 빈 친구, ✖ = 막힌 친구. ⚽ 경기에서: 공 받기 전에 고개 돌려 보기.</span></li>
+      <li><b>기억으로 패스 (레벨 4)</b><span>공이 오면 화면이 가려져요. 봐 둔 ✔ 친구 쪽을 눌러요. ⚽ 경기에서: 받는 순간엔 공을 보니까, 미리 봐 둔 그림으로 패스.</span></li>
+      <li><b>드리블 돌파 (레벨 5)</b><span>줄 곳이 없으면 <u>화면 가운데</u>로 치고 나가요. ⚽ 경기에서: 공을 몰고 빈 공간으로.</span></li>
+      <li><b>1:1 슛 (공격 칸을 다 채우면)</b><span>공을 골대 구석 쪽으로 <u>쓸어 올려요</u>. 빠를수록 세게! 골키퍼가 한쪽으로 기울면 반대 구석. 전진 패스로 빨리 오면 <u>⚡ 역습 찬스</u>(골키퍼가 늦어요).</span></li>
+      <li><b>선수 성장</b><span>판이 끝나면 경험치가 쌓여 선수 레벨이 올라요. 오늘의 미션 3개, 배지, 새 유니폼 색도 모아 보세요.</span></li>
     </ol>
     <button type="button" id="btn-tut-again2" class="btn">▶ 30초 따라 하기 다시</button>
     <p class="fine">컴퓨터: ← 왼쪽 · → 오른쪽 · ↑ 가운데(돌파) · 마우스 끌기로 둘러보기 · 슛은 마우스로 위로 끌거나 ← ↑ → 키</p>
@@ -217,9 +228,17 @@
 <section id="scr-tutdone" class="screen sheet-screen">
   <div class="sheet">
     <header class="sheet-head"><h2 id="tutdone-title">준비 끝! 🎉</h2><button type="button" class="x-btn" data-close aria-label="닫기">✕</button></header>
-    <p class="sheet-lead">이제 <b>챌린지</b>에서 랭킹에 도전해요. 레벨이 오르면 <b>둘러보기 · 돌파 · 휘슬</b>이 하나씩 나오고, 처음 나올 때 화면이 알려 줘요.</p>
+    <p class="sheet-lead">이제 <b>챌린지</b>에서 랭킹에 도전해요. 레벨이 오르면 <b>↑ 전진 패스 · 둘러보기 · 돌파</b>가 하나씩 나오고, 처음 나올 때 화면이 알려 줘요.</p>
     <button type="button" id="btn-tut-challenge" class="btn btn-primary"><span>챌린지 시작</span><small>닉네임만 정하면 바로</small></button>
     <div class="btn-row"><button type="button" id="btn-tut-again" class="btn">한 번 더</button><button type="button" id="btn-tut-home" class="btn">처음으로</button></div>
+  </div>
+</section>
+
+<!-- 내 성장 -->
+<section id="scr-career" class="screen sheet-screen">
+  <div class="sheet tall">
+    <header class="sheet-head"><h2>내 성장</h2><button type="button" class="x-btn" data-close aria-label="닫기">✕</button></header>
+    <div id="career-body" class="career-body"></div>
   </div>
 </section>
 
@@ -332,6 +351,7 @@
       <div class="res-sub" id="res-sub">LV 1 · 정확도 0%</div>
       <div class="res-bi-line">축구 두뇌 지수 <b id="res-bi2">0</b> <em id="res-grade2">—</em></div>
     </div>
+    <div class="res-career" id="res-career" hidden></div>
     <dl class="stats key" id="res-key"></dl>
     <p class="coach" id="res-coach"></p>
     <div class="res-actions">
