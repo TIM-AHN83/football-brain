@@ -23,8 +23,9 @@ export function getSettings() {
 export function setSettings(s) { store.set('settings', s); }
 export function addHistory(sum) {
   const h = store.get('history', []);
-  h.unshift({ t: Date.now(), mode: sum.mode, score: sum.score, level: sum.level, accuracy: sum.accuracy, avgRt: sum.avgRt, bi: sum.brainIndex });
-  store.set('history', h.slice(0, 40));
+  const ax = {}; for (const k in (sum.axes || {})) if (sum.axes[k] != null) ax[k] = Math.round(sum.axes[k] * 100) / 100; // 부모 리포트: 능력별 변화
+  h.unshift({ t: Date.now(), mode: sum.mode, score: sum.score, level: sum.level, accuracy: sum.accuracy, avgRt: sum.avgRt, bi: sum.brainIndex, ax, dur: sum.duration || 0 });
+  store.set('history', h.slice(0, 150));
   if (sum.mode === 'challenge') {
     const best = store.get('best', null);
     if (!best || sum.score > best.score) { store.set('best', { score: sum.score, level: sum.level, bi: sum.brainIndex, t: Date.now() }); return true; }

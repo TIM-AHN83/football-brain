@@ -7,7 +7,7 @@ const $ = (s) => document.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const AXES = [['judge', '판단'], ['speed', '속도'], ['vision', '시야'], ['call', '콜'], ['scan', '스캔'], ['brake', '멈춤']];
 // 코치 한마디: 가장 약한 능력 → 운동장에서 바로 해 볼 수 있는 한 가지
-const TIPS = {
+export const TIPS = {
   judge: '운동장에서: 공을 받기 전에 수비가 없는 친구를 먼저 찾아 두세요. 그러면 받자마자 바로 줄 수 있어요.',
   speed: '운동장에서: 결정이 빠르면 수비가 붙기 전에 패스할 수 있어요. 게임에선 보자마자 손가락이 나가게 연습!',
   vision: '운동장에서: 공만 보지 말고 고개를 들어 양쪽 친구를 한 번에 봐요. 멀리 있는 수비도 놓치지 않기.',
@@ -328,9 +328,52 @@ export class UI {
       <h3 class="cs-h">모두 합쳐서</h3>
       <dl class="stats"><div><dt>챌린지</dt><dd>${T.plays}<small>판</small></dd></div><div><dt>골</dt><dd>${T.goals}</dd></div><div><dt>↑ 전진 패스</dt><dd>${T.fwd}</dd></div>
         <div><dt>👀 둘러보기 패스</dt><dd>${T.scan}</dd></div><div><dt>역동작 골</dt><dd>${T.wrong}</dd></div><div><dt>최고 점수</dt><dd>${best ? best.score.toLocaleString('ko-KR') : '–'}</dd></div></dl>
-      <p class="fine">경험치 = 점수 ÷ 40 + 미션 보상. 기록은 이 기기에 저장돼요.</p>`;
+      <p class="fine">경험치 = 점수 ÷ 40 + 미션 보상. 기록은 이 기기에 저장돼요.</p>
+      <button type="button" class="btn" id="btn-career-report">👪 부모 리포트 보기 (이번 주)</button>`;
+    $('#btn-career-report').onclick = () => { document.querySelector('#btn-report').click(); };
     $('#career-body').querySelectorAll('.kit[data-kit]').forEach(b => b.addEventListener('click', () => onKit && onKit(b.dataset.kit)));
     $('#career-body').querySelectorAll('.kit[data-wx]').forEach(b => b.addEventListener('click', () => onWeather && onWeather(b.dataset.wx)));
+  }
+
+  // 부모 리포트 (최근 7일, 이 기기 기록)
+  renderParentReport(r) {
+    const el = $('#report-body'); if (!el) return;
+    if (!r.games) { el.innerHTML = `<p class="sheet-lead">최근 7일 동안 한 판도 안 했어요. 오늘 3판(약 6분)으로 시작해 보세요!</p>${r.next ? `<p class="fine">다음에 배울 기술: 레벨 ${r.next.lv} ${esc(r.next.name)}</p>` : ''}`; return; }
+    const d = (a, b, unit = '', inv = false) => a == null || b == null ? '' : (() => { const x = Math.round((inv ? b - a : a - b)); return `<em class="${x > 0 ? 'up' : x < 0 ? 'down' : ''}">${x > 0 ? '▲' : x < 0 ? '▼' : '–'}${x ? Math.abs(x) + unit : ''}</em>`; })();
+    el.innerHTML = `
+      <p class="sheet-lead">최근 7일 · 이 기기 기록으로 만들었어요 (서버로 보내지 않아요). 지난주와 비교해 ▲ 좋아짐 ▼ 떨어짐.</p>
+      <dl class="stats rep">
+        <div><dt>연습한 날</dt><dd>${r.days}<small>일 · ${r.games}판</small></dd></div>
+        <div><dt>시간</dt><dd>${r.minutes}<small>분</small></dd></div>
+        <div><dt>두뇌 지수</dt><dd>${r.cur.bi != null ? Math.round(r.cur.bi) : '–'} ${d(r.cur.bi, r.prev.bi)}</dd></div>
+        <div><dt>판단 정확도</dt><dd>${r.cur.acc != null ? Math.round(r.cur.acc) + '<small>%</small>' : '–'} ${d(r.cur.acc, r.prev.acc, '%')}</dd></div>
+        <div><dt>반응 속도</dt><dd>${r.cur.rt != null ? Math.round(r.cur.rt) + '<small>ms</small>' : '–'} ${d(r.cur.rt, r.prev.rt, 'ms', true)}</dd></div>
+        <div><dt>챌린지 최고</dt><dd>${r.best ? r.best.toLocaleString('ko-KR') : '–'}</dd></div>
+      </dl>
+      <div class="rep-row good"><b>많이 는 능력</b><span>${r.up ? `${esc(r.up.label)} +${Math.round(r.up.d * 100)}` : (r.gamesPrev ? '이번 주는 비슷해요' : '다음 주부터 비교해요')}</span></div>
+      <div class="rep-row"><b>더 연습할 능력</b><span>${r.weak ? esc(r.weak.label) : '–'}</span></div>
+      <p class="coach"><b>운동장에서 해 볼 한 가지</b> · ${esc(r.tip.replace(/^운동장에서:\s*/, ''))}</p>
+      ${r.next ? `<p class="fine">다음 기술: 챌린지 레벨 ${r.next.lv}에서 <b>${esc(r.next.name)}</b>를 배워요.</p>` : ''}
+      <p class="fine">하루 10~15분, 주 3~4일이면 충분해요. 게임이 끝나면 실제 공으로 '받기 전에 둘러보기'를 한 번 해 보면 더 좋아요.</p>`;
+  }
+
+  renderCheck(res, running) {
+    const el = $('#check-body'); if (!el) return;
+    if (running) { el.innerHTML = `<p class="sheet-lead">${esc(running)}</p><p class="fine">점검하는 동안 화면을 만지지 말아 주세요. 기록·랭킹은 바뀌지 않아요.</p>`; return; }
+    if (!res) { el.innerHTML = `<p class="sheet-lead">이 휴대폰에서 게임이 얼마나 부드럽게 도는지(화면 속도), 규칙이 다 맞게 움직이는지 약 30초 동안 자동으로 점검해요. 기록·랭킹·성장은 바뀌지 않아요.</p>`; return; }
+    const i = res.info, p = res.perf && res.perf.frames > 30 && !res.perf.hidden ? res.perf : null, cls = (v, good, bad) => v >= good ? 'good' : v <= bad ? 'bad' : '';
+    el.innerHTML = `
+      <dl class="stats rep">
+        <div><dt>화면 속도</dt><dd class="${p ? cls(p.fps, 50, 30) : ''}">${p ? p.fps + '<small>fps</small>' : '–'}</dd></div>
+        <div><dt>가장 느릴 때</dt><dd class="${p ? cls(p.low, 30, 15) : ''}">${p ? p.low + '<small>fps</small>' : '–'}</dd></div>
+        <div><dt>처음 화면까지</dt><dd class="${i.loadMs ? (i.loadMs < 6000 ? 'good' : i.loadMs > 12000 ? 'bad' : '') : ''}">${(i.loadMs / 1000).toFixed(1)}<small>초</small></dd></div>
+        <div><dt>규칙 점검</dt><dd class="${res.pass === res.total ? 'good' : 'bad'}">${res.pass}<small>/${res.total}</small></dd></div>
+        <div><dt>받은 양</dt><dd>${Math.round(i.transferKB / 100) / 10}<small>MB</small></dd></div>
+        <div><dt>슛 힘 보정</dt><dd>×${res.swipe.k}<small> (${res.swipe.n}번)</small></dd></div>
+      </dl>
+      <ul class="checks">${res.tests.map(t => `<li class="${t.pass ? 'ok' : 'no'}">${t.pass ? '✔' : '✖'} ${esc(t.name)}${t.detail ? ` <small>${esc(t.detail)}</small>` : ''}</li>`).join('')}</ul>
+      ${res.perf && !p ? '<p class="warn">화면 속도를 재지 못했어요 (점검 중에 화면이 꺼지거나 다른 앱으로 갔어요). 화면을 켠 채로 다시 해 주세요.</p>' : ''}
+      <p class="fine">${esc(i.os)} · ${esc(i.browser)} · ${esc(i.gpu)} · 화면 ${esc(i.screen)}</p>`;
   }
 
   renderRanking(rows, me, emptyMsg, targets) {

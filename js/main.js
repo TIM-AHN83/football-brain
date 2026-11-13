@@ -14,6 +14,8 @@ import { loadPeople } from './people.js';
 import { ClubUI, getClub, cleanCode, renderClubRanking } from './club.js';
 import { load as loadCareer, todayMissions, streakNow, kitOf, setKitChoice, startLevelFor, setCont, applyRun, MISSIONS, titleOf, xpNeed, weatherFor, setWeatherChoice, weekState } from './career.js';
 import { weekInfo } from './events.js';
+import { runCheck, reportText } from './check.js';
+import { weeklyReport, reportCard } from './report.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -34,6 +36,16 @@ const PREVIEW = !!window.FB_PREVIEW; // Claude 미리보기 링크: 마이크·�
 const params = new URLSearchParams(location.search);
 if (params.get('c')) store.set('code', params.get('c').slice(0, 16));
 if (params.get('club')) store.set('pendingClub', cleanCode(params.get('club'))); // 카카오톡 등으로 받은 클럽 초대 링크
+// 2.3 친구 도전 링크: ?vs=닉네임&s=점수&l=레벨 (공유 버튼이 만든다). 글자는 화면에 textContent 로만 쓴다
+if (params.get('vs')) {
+  const nick = params.get('vs').replace(/[<>\u0000-\u001f]/g, '').trim().slice(0, 12), s = Math.max(0, Math.min(5e6, parseInt(params.get('s'), 10) || 0));
+  if (nick && s) store.set('rival', { nick, score: s, level: Math.max(1, Math.min(99, parseInt(params.get('l'), 10) || 1)), t: Date.now(), won: false });
+}
+// 시범 운영 익명 통계: 랭킹 기기 번호와 다른 무작위 번호
+function statId() { let id = store.get('statId', null); if (!id) { id = Array.from(crypto.getRandomValues(new Uint8Array(10)), b => b.toString(16).padStart(2, '0')).join(''); store.set('statId', id); } return id; }
+const statsOn = () => settings.stats !== false && !PREVIEW && !params.get('demo') && !params.has('check') && !checking;
+const track = (kind, data) => { if (statsOn()) Board.log(kind, data, statId(), CONFIG.version); };
+let checking = false, bot = null;
 const club = new ClubUI({ ui, preview: PREVIEW, needProfile: () => openProfile('club'), openRanking: (tab) => openRanking(tab) });
 let inviteShown = false;
 const bootFill = $('#boot-fill'), bootMsg = $('#boot-msg');
@@ -71,6 +83,7 @@ async function boot() {
   game.setKit(kitOf().kit); // 선수 레벨로 해금한 유니폼 색
   world.setWeather(weatherFor()); // 선수 레벨로 해금한 날씨
   game.onTutorialDone = (finished) => { // 따라 하기가 끝나면(또는 건너뛰면) 챌린지로 안내
+    track('tut', { done: !!finished });
     endSession(); store.set('tutDone', true); showTitle();
     if (finished) { game.setTaught('pass'); game.setTaught('shot'); } // 따라 하기에서 배운 기술은 카드를 다시 띄우지 않는다
     $('#tutdone-title').textContent = finished ? '준비 끝! 🎉' : '언제든 다시 따라 할 수 있어요';
@@ -107,6 +120,9 @@ async function boot() {
   setTimeout(() => world.loadEnv('dusk'), 1500); setTimeout(() => world.loadEnv('night'), 4000); // 해 질 녘·야간 하늘은 뒤에서 미리 받아 둔다
   if (!PREVIEW) Board.init();
   if (inApp && !PREVIEW) showInApp();
+  track('open', { first: !store.get('opened', false), ref: params.get('vs') ? 'vs' : params.get('club') ? 'club' : null, inapp: inApp, mobile: isMobile, games: store.get('games', 0) });
+  store.set('opened', true);
+  if (params.has('check')) setTimeout(openCheck, 900);
   $('#ver-line').textContent = `버전 ${CONFIG.version} · 시범 운영(베타)`;
 }
 
@@ -115,7 +131,8 @@ let last = performance.now(), perf = { t: 0, n: 0, sum: 0 };
 function loop(now) {
   requestAnimationFrame(loop);
   const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now;
-  if (state === 'play' || state === 'paused') game.update(dt); else if (state !== 'boot') game.cinematic(dt, now / 1000);
+  if (state === 'play' || state === 'paused') { if (bot && state === 'play') bot(dt); game.update(dt); }
+  else if (state !== 'boot' && state !== 'check') game.cinematic(dt, now / 1000); // 'check' = 기기 점검의 규칙 점검 (게임을 직접 돌린다)
   world.update(dt); world.render();
   if ((perf.cx = (perf.cx || 0) + dt) > .25) { perf.cx = 0; audio?.crowdLevel(world.excite); } // 관중 녹음이 있으면 분위기 따라 크기
   // 느린 기기면 해상도를 자동으로 낮춘다
@@ -131,7 +148,8 @@ function loop(now) {
 
 // ---------- 타이틀 ----------
 function showTitle() {
-  state = 'title'; ui.go('scr-title'); renderPlayerCard(); club.refreshCard(); renderCareerCard();
+  if (!window.__fbTitleAt) window.__fbTitleAt = performance.now(); // 기기 점검: 처음 화면까지 걸린 시간
+  state = 'title'; ui.go('scr-title'); renderPlayerCard(); club.refreshCard(); renderCareerCard(); renderVs();
   const first = !store.get('tutDone', false) && !store.get('history', []).length; // 처음 온 사람: 30초 따라 하기를 먼저
   $('#btn-tutorial').hidden = !first; $('#btn-challenge').classList.toggle('btn-primary', !first);
   if (store.get('pendingClub', '') && !inviteShown && !PREVIEW) { inviteShown = true; setTimeout(() => club.open(), 600); } // 초대 링크로 들어왔으면 클럽 화면을 연다
@@ -267,6 +285,7 @@ async function kickoff() {
     game.endCinematic(); game.look.drag = 0; game.look.key = 0;
     lastMode = setupMode;
     game.event = weekInfo().ev.id; world.setWeather(weatherFor()); // 이번 주 이벤트 보너스 · 날씨 ('랜덤'이면 판마다)
+    track('play', { mode: setupMode, lv: setupMode === 'challenge' ? challengeStart() : setupLevel, n: store.get('games', 0), voice: !!game.opts.voice, motion: !!game.opts.motion });
     game.start(setupMode, { level: setupMode === 'challenge' ? challengeStart() : setupLevel });
     ui.mic(game.opts.voice ? 'live' : null);
     gestures.enabled = true; gestures.reset(); state = 'play';
@@ -282,7 +301,10 @@ function endSession() { gestures.enabled = false; voice.stop(); audio.setDuck(fa
 
 // ---------- 결과 ----------
 function onEnd(sum) {
+  if (checking) return; // 기기 점검 중에는 결과·기록을 남기지 않는다
   endSession(); lastSummary = sum; state = 'result';
+  const games = store.get('games', 0) + 1; store.set('games', games);
+  track('end', { mode: sum.mode, lv: sum.level, start: sum.startLevel, score: sum.score, dur: sum.duration, acc: sum.accuracy, n: games, fwd: sum.fwd, wall: sum.wall, thru: sum.thru });
   lastBest = addHistory(sum);
   ui.renderResult(sum); ui.go('scr-result');
   try { ui.renderCareerLine(applyRun(sum)); } catch (e) { console.error(e); ui.renderCareerLine(null); } // 경험치·미션·배지
@@ -293,7 +315,34 @@ function onEnd(sum) {
   // 챌린지 기록은 개인 랭킹에 자동 등록 (클럽 회원이면 팀 점수에도 같이). 개발용 ?demo 화면은 실제 랭킹에 올리지 않는다
   if (sum.ranked && params.get('demo')) { renderResRank({ err: '데모 화면 · 등록 안 함' }); $('#submit-msg').textContent = '개발용 데모 화면이라 랭킹에 올리지 않았어요.'; }
   else if (sum.ranked) submitScore();
+  renderResVs(sum);
+  // 1탭 의견: 1·3·6번째 판, 그 뒤 10판마다
+  const fb = $('#res-fb'); fb.hidden = !([1, 3, 6].includes(games) || games % 10 === 0) || PREVIEW;
+  fb.querySelectorAll('button').forEach(b => b.classList.remove('on')); fb.querySelector('.fb-tags').hidden = true; fb.dataset.n = games;
 }
+// ---------- 1탭 의견 ----------
+$('#res-fb').addEventListener('click', (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  const box = $('#res-fb'), n = +box.dataset.n || 0;
+  if (b.dataset.r) {
+    box.querySelectorAll('[data-r]').forEach(x => x.classList.toggle('on', x === b));
+    track('fb', { rate: +b.dataset.r, n, mode: lastSummary?.mode, lv: lastSummary?.level });
+    box.querySelector('.fb-tags').hidden = false; ui.toast('고마워요! 어려웠던 게 있으면 하나 더 눌러 주세요', 2200);
+  } else if (b.dataset.t && !b.classList.contains('on')) { b.classList.add('on'); track('fb', { tag: b.dataset.t, n, mode: lastSummary?.mode, lv: lastSummary?.level }); }
+});
+// ---------- 친구 도전 ----------
+function renderVs() {
+  const r = store.get('rival', null), el = $('#vs-line'); el.hidden = !r || PREVIEW; if (!r) return;
+  el.textContent = r.won ? `🆚 ${r.nick} 이겼어요! 🎉 나도 도전장을 보내 볼까요?` : `🆚 ${r.nick}의 ${r.score.toLocaleString('ko-KR')}점 (LV ${r.level})에 도전! ›`;
+}
+$('#vs-line').addEventListener('click', () => { const r = store.get('rival', null); if (r?.won) return ui.toast('결과 화면의 공유 버튼이 도전장 링크예요', 2600); $('#btn-challenge').click(); });
+function renderResVs(sum) {
+  const r = store.get('rival', null), el = $('#res-vs'); el.hidden = !(r && sum.mode === 'challenge'); if (el.hidden) return;
+  const d = sum.score - r.score; el.classList.toggle('win', d >= 0);
+  el.textContent = d >= 0 ? `🆚 ${r.nick} ${r.score.toLocaleString('ko-KR')}점 → 이겼어요! (+${d.toLocaleString('ko-KR')}) 공유로 도전장을 돌려주세요` : `🆚 ${r.nick} ${r.score.toLocaleString('ko-KR')}점까지 ${(-d).toLocaleString('ko-KR')}점 남았어요 · 한 판 더!`;
+  if (d >= 0 && !r.won) { r.won = true; store.set('rival', r); }
+}
+$('#res-vs').addEventListener('click', () => { const r = store.get('rival', null); if (r && !r.won) $('#btn-again').click(); else $('#btn-share').click(); });
 // 결과 화면의 개인 랭킹 · 팀 랭킹 두 칸 (누르면 그 랭킹을 연다)
 let lastBest = false;
 const escH = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -330,13 +379,17 @@ async function submitScore() {
   }
 }
 $('#btn-submit').addEventListener('click', () => submitScore());
-$('#btn-again').addEventListener('click', () => { showTitle(); openSetup(lastMode, setupLevel); });
+$('#btn-again').addEventListener('click', () => { track('again', { mode: lastMode, n: store.get('games', 0) }); showTitle(); openSetup(lastMode, setupLevel); });
 $('#btn-home').addEventListener('click', showTitle);
 $('#btn-share').addEventListener('click', async () => {
   const s = lastSummary; if (!s) return;
   if (PREVIEW) { ui.toast('미리보기 링크에서는 공유가 막혀 있어요'); return; }
-  const url = location.origin + location.pathname;
-  const text = `축구 두뇌 지수 ${s.brainIndex}점! FOOTBALL BRAIN 챌린지 ${s.score.toLocaleString('ko-KR')}점 (LV ${s.level}) — 너도 도전해 봐 👉 ${url}`;
+  // 2.3: 챌린지 결과는 '친구 도전 링크' (받은 친구 화면에 내 점수가 목표로 뜬다)
+  const nick = getProfile()?.nick || '친구';
+  const url = location.origin + location.pathname + (s.mode === 'challenge' ? `?vs=${encodeURIComponent(nick)}&s=${s.score}&l=${s.level}` : '');
+  const text = s.mode === 'challenge' ? `${nick}의 축구 두뇌 ${s.score.toLocaleString('ko-KR')}점 (LV ${s.level})! 나를 이겨 봐 🆚 👉 ${url}`
+    : `축구 두뇌 지수 ${s.brainIndex}점! FOOTBALL BRAIN — 너도 해 봐 👉 ${url}`;
+  track('share', { mode: s.mode });
   try {
     const blob = await shareCard(s, getProfile(), url, ui);
     const file = new File([blob], 'football-brain.png', { type: 'image/png' });
@@ -409,7 +462,51 @@ async function loadRanking() {
 void pSeg;
 
 // ---------- 설정 ----------
-$('#btn-settings').addEventListener('click', () => ui.open('scr-settings'));
+$('#btn-settings').addEventListener('click', () => { renderSwipe(); ui.open('scr-settings'); });
+function renderSwipe() {
+  const n = store.get('swipes', []).length, k = store.get('swipeK', 1);
+  $('#swipe-out').textContent = n < 4 ? `슛을 ${4 - n}번 더 차면 이 기기에 맞춰져요 (지금 ×${k})` : `쓸기 ${n}번으로 맞춤 · 보정 ×${k} (${k < .95 ? '세게 쓰는 편 → 조금 줄임' : k > 1.05 ? '살살 쓰는 편 → 조금 키움' : '보통'})`;
+}
+$('#btn-swipe-reset').addEventListener('click', () => { store.set('swipes', []); store.set('swipeK', 1); renderSwipe(); ui.toast('다음 슛부터 다시 맞춰요'); });
+$('#tg-stats').checked = settings.stats !== false;
+$('#tg-stats').addEventListener('change', (e) => { settings.stats = e.target.checked; setSettings(settings); });
+// ---------- 기기 점검 (화면 속도·로딩·규칙 점검) ----------
+let checkRes = null;
+function openCheck() { ui.close('scr-settings'); ui.renderCheck(checkRes); $('#btn-check-send').disabled = $('#btn-check-copy').disabled = !checkRes; ui.open('scr-check'); }
+$('#btn-check').addEventListener('click', openCheck);
+$('#btn-check-run').addEventListener('click', async () => {
+  if (checking) return;
+  checking = true; $('#btn-check-run').disabled = true; gestures.enabled = false;
+  ui.close('scr-check'); audio.unlock(); audio.crowdOn(false);
+  const tip = (t) => ui.toast(t, 2500);
+  try {
+    checkRes = await runCheck({ game, world, ui, setState: (s) => { state = s; }, setBot: (b) => { bot = b; }, fast: params.has('fast'), onProgress: tip });
+  } catch (e) { console.error(e); ui.toast('점검하지 못했어요'); }
+  finally { bot = null; checking = false; $('#btn-check-run').disabled = false; game.quit(); showTitle(); }
+  if (checkRes) { ui.renderCheck(checkRes); $('#btn-check-send').disabled = $('#btn-check-copy').disabled = false; $('#btn-check-send').textContent = '결과 보내기 (익명)'; ui.open('scr-check'); }
+});
+$('#btn-check-copy').addEventListener('click', async () => {
+  if (!checkRes) return;
+  try { await navigator.clipboard.writeText(reportText(checkRes)); ui.toast('복사했어요 · 인스타 DM 등에 붙여 넣어 주세요'); } catch (e) { ui.toast('복사하지 못했어요'); }
+});
+$('#btn-check-send').addEventListener('click', () => { // 누른 사람만 보낸다 (설정의 통계 끄기와 상관없이, 버튼이 동의)
+  if (!checkRes || PREVIEW) return;
+  const r = checkRes;
+  Board.log('check', { info: r.info, perf: r.perf, pass: r.pass, total: r.total, fail: r.tests.filter(t => !t.pass).map(t => t.name), swipe: r.swipe }, statId(), CONFIG.version);
+  $('#btn-check-send').disabled = true; $('#btn-check-send').textContent = '보냈어요 · 고마워요!';
+});
+// ---------- 부모 리포트 ----------
+let lastReport = null;
+function openReport() { lastReport = weeklyReport(store.get('history', []), loadCareer().maxLv); ui.renderParentReport(lastReport); ui.open('scr-report'); }
+$('#btn-report').addEventListener('click', openReport);
+$('#btn-report-share').addEventListener('click', async () => {
+  if (!lastReport) return; if (PREVIEW) return ui.toast('미리보기 링크에서는 공유가 막혀 있어요');
+  try {
+    const blob = await reportCard(lastReport, getProfile()?.nick), file = new File([blob], 'football-brain-report.png', { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: '축구 두뇌 훈련 부모 리포트' }); return; }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'football-brain-report.png'; document.body.appendChild(a); a.click(); a.remove(); ui.toast('리포트 이미지를 저장했어요');
+  } catch (e) { if (e && e.name !== 'AbortError') ui.toast('보내지 못했어요'); }
+});
 seg('seg-quality', settings.quality, v => { settings.quality = v; setSettings(settings); ui.toast('다음에 게임을 열 때 적용돼요'); });
 seg('seg-sound', settings.sound, v => { settings.sound = v; setSettings(settings); audio.setMode(v); audio.unlock(); audio.ok(); });
 // ---------- 마이크 확인 (시작 준비 화면·설정 화면 공통) ----------
@@ -475,6 +572,8 @@ async function demo(which) {
     if (which === 'play') { game.level = lv; game.newAttack(true); }
     gestures.enabled = true; state = 'play';
   } else if (which === 'career') { openCareer();
+  } else if (which === 'report') { openReport();
+  } else if (which === 'check') { openCheck();
   } else if (['howto', 'drills', 'ranking', 'settings', 'setup', 'profile', 'info'].includes(which)) {
     if (which === 'setup') openSetup('challenge'); else if (which === 'profile') openProfile(); else if (which === 'ranking') openRanking(params.get('kind') || 'solo'); else ui.open('scr-' + which);
   }

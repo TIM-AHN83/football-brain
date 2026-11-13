@@ -857,7 +857,15 @@ export class Game {
   // 쓸어 올린 각도 → 골대 위 가로 위치(x, m). 똑바로 위 = 가운데, 약 22~28° 기울이면 구석, 30° 넘으면 골대 밖
   swipeAim(sw) { return clamp(6.4 * Math.tan(Math.atan2(sw.dx, -sw.dy)), -9, 9); }
   // 쓸어 올린 빠르기 → 힘 (0 ~ 1.35). 화면 높이 기준 초당 몇 배를 쓸었는지로 잰다 (휴대폰마다 화면 크기가 달라도 같게)
-  shotPower(sw) { const vN = (Math.abs(sw.dy) / sw.H) / (sw.dt / 1000); return clamp(0.2 + (vN - 0.8) * 0.19, 0, 1.35); }
+  // 2.3: 기기·손가락마다 쓸기 빠르기가 달라 크로스바 위로만 가거나 너무 약할 수 있다 → 이 기기의 보통 쓸기가 힘 78%가 되게 맞춘다 (swipeK)
+  shotPower(sw) { const vN = (Math.abs(sw.dy) / sw.H) / (sw.dt / 1000); this.lastVN = vN; return clamp(0.2 + (vN * store.get('swipeK', 1) - 0.8) * 0.19, 0, 1.35); }
+  learnSwipe(vN) { // 최근 12번 쓸기의 가운데 값으로 보정값을 조금씩 옮긴다 (4번부터)
+    if (!(vN > 0.2 && vN < 40)) return;
+    const a = store.get('swipes', []); a.push(Math.round(vN * 100) / 100); while (a.length > 12) a.shift(); store.set('swipes', a);
+    if (a.length < 4) return;
+    const m = [...a].sort((x, y) => x - y)[a.length >> 1], kAuto = clamp(3.85 / m, .6, 1.7);
+    store.set('swipeK', Math.round((store.get('swipeK', 1) * .7 + kAuto * .3) * 1000) / 1000);
+  }
 
   onSwipe(sw) {
     if (this.paused) return;
@@ -879,6 +887,7 @@ export class Game {
     const b0 = this.ball.position.clone(); b0.y = .11;
     const x = sw.key ? (sw.key === 'L' ? -2.9 : sw.key === 'R' ? 2.9 : 0) : clamp(this.swipeAim(sw) / Math.max(.5, U.z), -12, 12);
     const p = sw.key ? .75 : this.shotPower(sw);
+    if (!sw.key && this.lastVN) this.learnSwipe(this.lastVN); // 이번 쓸기는 다음 슛부터 반영
     const rt = Math.max(0, Math.round((sw.t ?? performance.now()) - r.onsetReal));
     const lean = this.keeperLean();
     const y = 0.15 + 2.5 * clamp((p - 0.3) / 0.75, 0, 1.25); // 골라인에서 공 높이: 세게 찰수록 높다

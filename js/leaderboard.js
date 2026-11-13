@@ -36,6 +36,10 @@ export const Board = {
     try { return (await rpc(fn, body)) || { ok: false, error: 'network' }; }
     catch (e) { return { ok: false, error: why(e) }; }
   },
+  // 시범 운영 익명 통계 (2.3, supabase/fb_stats.sql): 랭킹과 다른 무작위 번호(statId)로만 보낸다. 실패해도 게임에는 영향 없음
+  log(kind, data, statId, version) {
+    rpc('fb_log', { p: { device: statId, kind, data: data || {}, v: version || '' } }, 5000).catch(() => {});
+  },
   clubCreate(name, device, nick) { return this.call('fb_club_create', { p: { name, device, nick } }); },
   clubJoin(code, device, nick) { return this.call('fb_club_join', { p: { code, device, nick } }); },
   clubLeave(device) { return this.call('fb_club_leave', { p: { device } }); },

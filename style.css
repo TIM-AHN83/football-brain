@@ -429,3 +429,25 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .wk-m em{font-style:normal;font:800 13px var(--num);color:var(--good);white-space:nowrap}
 .wk.ok{opacity:.8}
 .kit.wx .ico{width:auto;height:auto;border:0;font-style:normal;font-size:22px;line-height:28px}
+
+/* ---------- 2.3 부모 리포트 · 기기 점검 · 친구 도전 · 의견 ---------- */
+.stats.rep dd em{font:700 12px var(--body);font-style:normal;margin-left:4px}
+.stats.rep dd em.up{color:var(--good)} .stats.rep dd em.down{color:var(--threat)}
+.stats.rep dd.good{color:var(--good)} .stats.rep dd.bad{color:var(--threat)}
+.rep-row{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(244,246,251,.05);border-left:3px solid var(--threat);font-size:14px}
+.rep-row.good{border-left-color:var(--good)}
+.rep-row b{font-weight:700;color:var(--mist)} .rep-row span{font-weight:800}
+.checks{margin:0;padding:0;list-style:none;display:grid;gap:3px;font-size:13px}
+.checks li{padding:5px 8px;background:rgba(56,210,122,.08)} .checks li.no{background:rgba(255,77,58,.15);color:#ffb3a8}
+.checks small{color:var(--mist)}
+.vs-line{margin-top:6px;justify-self:start;padding:7px 12px;font:800 13px var(--body);color:var(--ink);background:var(--sun);border:0;box-shadow:0 2px 8px rgba(0,0,0,.25)}
+.res-vs{width:100%;padding:9px 12px;font:800 14px var(--body);text-align:left;background:rgba(255,201,60,.14);border:1px solid var(--sun);color:var(--sun)}
+.res-vs.win{background:rgba(56,210,122,.16);border-color:var(--good);color:var(--good)}
+.res-fb{display:grid;gap:8px;padding:10px 12px;background:rgba(244,246,251,.05);border:1px solid var(--line)}
+.res-fb b{font-size:14px}
+.fb-rate{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.fb-rate button,.fb-tags button{min-height:40px;border:1px solid var(--line);background:rgba(244,246,251,.06);font:700 13px var(--body)}
+.fb-rate button.on{background:var(--sun);color:var(--ink);border-color:var(--sun)}
+.fb-tags{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.fb-tags small{width:100%;color:var(--mist)} .fb-tags button{min-height:34px;padding:0 10px}
+.fb-tags button.on{background:var(--good);color:var(--ink);border-color:var(--good)}
