@@ -299,7 +299,7 @@ export class UI {
       <span class="cl-mid"><span class="cl-top"><b>${esc(c.title)}</b><em>+${c.gain} XP</em></span>
         <span class="xpbar"><i style="width:${pct}%"></i></span>
         <small>오늘의 미션 ${done}/3${c.streak > 1 ? ` · 🔥 ${c.streak}일 연속` : ''} · 내 성장 보기 ›</small></span></button>
-      ${chips.length ? `<div class="cchips">${chips.slice(0, 3).join('')}</div>` : ''}`;
+      ${chips.length ? `<div class="cchips">${chips.slice(0, 2).join('')}</div>` : ''}`;
   }
 
   // 내 성장 화면

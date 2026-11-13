@@ -1,5 +1,5 @@
 // 기기 점검 (2.3): 설정의 '기기 점검' 또는 주소 끝 ?check
-// (1) 기기·로딩 정보 (2) 20초 동안 실제 속도로 자동 플레이 → 화면 초당 장면 수(FPS) (3) 규칙 점검(자동 회귀 시험 19가지)
+// (1) 기기·로딩 정보 (2) 20초 동안 실제 속도로 자동 플레이 → 화면 초당 장면 수(FPS) (3) 규칙 점검(자동 회귀 시험 22가지)
 // 점검 중 바뀐 기기 저장값(기록·성장·연습)은 끝나면 그대로 되돌린다. 랭킹에는 올리지 않는다.
 import { store } from './store.js';
 import { CONFIG } from './config.js';
@@ -128,7 +128,16 @@ export function regression(game, world) {
     for (let n = 0; n < 3; n++) { until(() => game.phase === 'decide'); act(game.rally.answer); until(() => game.phase !== 'resolve', 60 * 6); }
     until(() => game.phase && game.phase.startsWith('shot'), 60 * 8);
     ok('공격 칸 3칸 → 1:1 슛', game.phase && game.phase.startsWith('shot'));
-    // 17 성장·리포트 계산 (저장값은 끝나고 되돌린다)
+    // 2.4 골키퍼 속임수 · 역습 찬스 조건 · 훈련장 2대1
+    game.quit(); game.start('shoot', { level: 9 }); game.event = null; until(() => game.phase === 'shotDecide', 60 * 15);
+    game.keeper.anim = null; game.keeper.shift(1, .28, .5); game.keeper.anim.fake = true; step(12);
+    ok('골키퍼 속임수: 작은 기울기는 역동작이 아님', game.keeperLean() === 0 && game.keeperFake() === 1);
+    const fastWith = (okN) => { game.quit(); game.start('challenge', { level: 4 }); game.event = null; until(() => game.phase === 'build'); game.rallyN = 2; game.atk = { rts: [.2, .25], ok: okN }; game.shotRun(); return game.fastShot; };
+    ok('역습 찬스: 옆으로 돌리면 없음 · 빠르고 앞으로면 있음', !fastWith(1) && fastWith(0));
+    game.quit(); game.start('wall', { level: 1 }); game.event = null;
+    until(() => game.rally && game.rally.kind === 'wall' && game.phase === 'decide' && dist() < 3.6, 60 * 25);
+    r = act(game.rally?.answer); ok('훈련장 2대1: 원 안에서 → 성공', r && r.correct);
+    // 성장·리포트 계산 (저장값은 끝나고 되돌린다)
     const c = applyRun({ mode: 'challenge', score: 4000, level: 4, goals: 3, fwdPasses: 4, scanSeen: 2, wrongfoot: 1, fastAttacks: 1, bestStreak: 6, axes: {} });
     const rep = weeklyReport(store.get('history', []), 4);
     ok('선수 성장·부모 리포트 계산', c.gain >= 100 && rep && typeof rep.games === 'number', `+${c.gain}XP`);

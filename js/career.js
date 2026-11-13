@@ -49,11 +49,11 @@ export const BADGES = [
   { id: 'lv5', ico: '🥈', name: '레벨 5', how: '챌린지 레벨 5' },
   { id: 'lv8', ico: '🥇', name: '레벨 8', how: '챌린지 레벨 8' },
   { id: 'streak15', ico: '💯', name: '15연속 정답', how: '한 판에 연속 15번 정답' },
-  { id: 'drills', ico: '🏋️', name: '훈련장 완주', how: '훈련장 5종 모두 끝내기' },
+  { id: 'drills', ico: '🏋️', name: '훈련장 완주', how: '훈련장 7종 모두 끝내기' },
   { id: 'day3', ico: '🔥', name: '3일 연속', how: '3일 연속 플레이' },
   { id: 'day7', ico: '🏆', name: '7일 연속', how: '7일 연속 플레이' },
 ];
-const DRILLS = ['flash', 'scan', 'mot', 'shoot', 'brake'];
+const DRILLS = ['flash', 'scan', 'mot', 'shoot', 'brake', 'wall', 'thru'];
 
 const pad = (n) => String(n).padStart(2, '0');
 export function dayKey(offset = 0) { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }

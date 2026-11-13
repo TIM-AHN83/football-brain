@@ -47,6 +47,8 @@ export const MODES = {
   brake:     { title: '판단 브레이크', lives: 0, total: 14, types: { pass: .4, both: .3, whistle: .3 } },
   mot:       { title: '등번호 추적', lives: 0, total: 8 },
   shoot:     { title: '1:1 슛', lives: 0, total: 10, shootOnly: true },
+  wall:      { title: '2대1 벽 패스', lives: 0, total: 10, types: { wall: 1 } },   // 2.4: 챌린지 LV7 기술을 처음부터 연습
+  thru:      { title: '스루패스 타이밍', lives: 0, total: 10, types: { thru: 1 } }, // 2.4: 챌린지 LV9 기술을 처음부터 연습
   tutorial:  { title: '30초 따라 하기', lives: 0, total: 99, tutorial: true, types: { pass: 1 } }, // 등록 없이 바로: 패스 2번 → 슛 2번
 };
 
@@ -113,6 +115,7 @@ export class Game {
   newAttack(first = false) {
     const S = levelSpec(this.level);
     this.spec = S; this.prog = 0; this.rallyN = 0; this.target = this.M.shots ? S.target : 0; this.fastShot = false;
+    this.atk = { rts: [], ok: 0 }; // 이번 공격의 판단 (역습 찬스 조건)
     this.world.setTimeOfDay(this.mode === 'challenge' ? S.tod : (this.level <= 4 ? 'day' : this.level <= 8 ? 'dusk' : 'night'));
     this.me.x = 0; this.me.z = START_Z; this.me.side = 0; this.me.sideT = 0; this.burst = 0; this.ui.blind(false); this.ui.scanChips(null);
     this.look.hold = null; this.mates.forEach(m => m.setMark(null));
@@ -143,7 +146,7 @@ export class Game {
 
   // 화면 칸 수: 전진 패스(LV2~)·돌파가 나오는 판은 왼쪽·가운데·오른쪽 3칸 — 가운데는 언제나 '앞으로'
   // (앞 친구에게 전진 패스, 줄 곳이 없으면 드리블 돌파). LV1·훈련장 패스는 왼쪽·오른쪽 2칸
-  passZones() { const t = this.M?.types || this.spec?.types || {}; return t.both || t.fwd ? 3 : 2; }
+  passZones() { const t = this.M?.types || this.spec?.types || {}; return t.both || t.fwd || t.wall || t.thru ? 3 : 2; }
   zones() { return this.phase && this.phase.startsWith('shot') ? 2 : this.passZones(); }
   swipeMode() { return !!(this.phase && this.phase.startsWith('shot')); } // 슛 장면: 화면을 쓸어 올려 찬다
   holdMode() { return this.phase === 'scanSet' || this.phase === 'scan'; } // 둘러보기: 화면 왼쪽·오른쪽을 꾹 = 그쪽 보기
@@ -365,12 +368,12 @@ export class Game {
     } else if (r.kind === 'wall') { // 수비가 달려든다
       this.stats.wallTotal++;
       const p = this.presser; p.glow(.6); this.after(140, () => p.glow(0)); this.audio.tick();
-      r.wallRel = r.practice ? 2.4 : Math.min(5, 3.3 + .15 * (this.level - 7)); // 다가오는 빠르기 (m/s)
+      r.wallRel = r.practice ? 2.4 : clamp(3.3 + .15 * (this.level - 7), 2.4, 5); // 다가오는 빠르기 (m/s)
       const d0 = Math.hypot(p.pos.x - this.me.x, p.pos.z - this.me.z);
       r.windowMs = Math.round(Math.max(1500, (d0 - 1.25) / r.wallRel * 1000));
     } else if (r.kind === 'thru') { // 앞 친구가 언제 뛰는지 본다
       this.stats.thruTotal++;
-      r.win = r.practice ? 1300 : Math.max(550, 1000 - 50 * (this.level - 9));
+      r.win = r.practice ? 1300 : clamp(1000 - 50 * (this.level - 9), 550, 1300);
       r.runAt = this.clock + (r.practice ? 1400 : rnd(800, 2000));
       r.windowMs = Math.round(r.runAt - this.clock + r.win + 900);
       this.after(r.runAt - this.clock, () => {
@@ -424,13 +427,13 @@ export class Game {
     const mult = this.spec.mult;
     if (correct) {
       this.stats.correct++; this.streak++; this.stats.bestStreak = Math.max(this.stats.bestStreak, this.streak);
-      if (r.grade === 'ok') this.stats.okTotal++;
+      if (r.grade === 'ok') { this.stats.okTotal++; if (this.atk) this.atk.ok++; }
       if (r.kind === 'fwd') { if (r.grade === 'best') this.stats.fwdBest++; else this.stats.fwdOk++; if (input === 'C') this.stats.fwdPasses++; }
       if (input === 'C') r.step = 2; // 전진 패스 · 드리블 돌파 · 스루패스 = 공격 2칸
       if (r.kind === 'wall') { this.stats.wallOk++; r.step = 2; }
       if (r.kind === 'thru' && input === 'C') this.stats.thruOk++;
       if (r.answer !== 'none') {
-        if (rt != null && r.kind !== 'wall' && r.kind !== 'thru') this.stats.rts.push(rt); // 때를 기다리는 판단은 반응 시간에서 뺀다
+        if (rt != null && r.kind !== 'wall' && r.kind !== 'thru') { this.stats.rts.push(rt); this.atk?.rts.push(rt / Math.max(1, r.windowMs)); } // 때를 기다리는 판단은 반응 시간에서 뺀다
         if (r.kind === 'pass' || r.kind === 'both' || r.kind === 'fwd') this.stats.minFlash = Math.min(this.stats.minFlash ?? 9999, r.flashMs);
       }
       if (r.practice) this.addPractice(r.practice); // 연습 성공 기록 (2번이면 연습 끝)
@@ -772,7 +775,9 @@ export class Game {
     if (this.M.shots) {
       this.ui.attack(this.target, this.target);
       // 역습 찬스: 목표 칸보다 2번 이상 적은 판단으로 슛까지 왔다 (전진 패스·돌파를 많이 했다) → 골키퍼가 준비 못 함
-      this.fastShot = this.target >= 4 && this.rallyN <= this.target - 2;
+      // 2.4: '찬스'답게 — 판단 수가 목표보다 2번 이상 적고(앞으로 2번 이상), 옆으로 돌린 적 없고, 판단이 빨랐을 때(제한 시간의 40% 안)만
+      const a = this.atk || { rts: [], ok: 0 }, quick = a.rts.length ? a.rts.reduce((s, x) => s + x, 0) / a.rts.length : 0;
+      this.fastShot = this.target >= 4 && this.rallyN <= this.target - 2 && !a.ok && quick <= .4;
       if (this.fastShot) this.stats.fastAttacks++;
     }
     const first = !this.stats.shots && !this.M.tutorial; // 따라 하기는 안내 카드가 대신 알려 준다
@@ -845,15 +850,25 @@ export class Game {
     if (!k.anim) { const t = this.keeperSpot(3.7); k.moveTo(t.x, t.z, .65); } // 천천히 다가오며 각도를 좁힌다
     if (this.clock >= r.nextCue && !k.anim) {
       const side = Math.random() < .5 ? -1 : 1;
-      k.shift(side, this.level <= 3 ? .75 : .55, r.cueMs / 1000); r.cues++; // LV1~3은 조금 크게 기운다
-      if (this.level <= 3) { k.glow(.3); this.after(160, () => k.glow(0)); } // 처음엔 살짝 번쩍여서 보는 법을 익힌다
-      r.nextCue = this.clock + 220 + r.cueMs + 300 + rnd(500, 1100);
+      // 2.4 골키퍼 속임수 (LV6~, 훈련장 1:1 슛은 레벨 5~): 작게 살짝 기울었다가 바로 돌아온다 — 몸이 실리지 않아 반대로 차도 역동작이 아니다.
+      // 구별법: 속임수는 기울기가 작고 짧다. '크게 기울 때만 반대'를 익히게
+      const fl = this.M.shootOnly ? this.level - 4 : this.level - 5, fake = !this.M.tutorial && !r.afterFake && fl > 0 && Math.random() < Math.min(.4, .08 * fl);
+      if (fake) { // 속임수 뒤에는 곧(0.4~0.7초) 진짜로 기운다 → 기다린 사람이 이득
+        const hold = Math.max(.25, r.cueMs / 1000 * .45); k.shift(side, .28, hold); k.anim.fake = true; r.afterFake = true;
+        r.nextCue = this.clock + 520 + hold * 1000 + rnd(150, 400);
+      } else {
+        k.shift(side, this.level <= 3 ? .75 : .55, r.cueMs / 1000); r.afterFake = false; // LV1~3은 조금 크게 기운다
+        if (this.level <= 3) { k.glow(.3); this.after(160, () => k.glow(0)); } // 처음엔 살짝 번쩍여서 보는 법을 익힌다
+        r.nextCue = this.clock + 220 + r.cueMs + 300 + rnd(500, 1100);
+      }
+      r.cues++;
     }
   }
-  keeperLean() { // 지금 골키퍼가 무게를 실은 쪽 (-1 / 0 / 1)
+  keeperLean() { // 지금 골키퍼가 무게를 실은 쪽 (-1 / 0 / 1). 속임수(작은 기울기)는 무게가 안 실려 0
     const A = this.keeper.anim;
-    return A && A.type === 'shift' && shiftAmount(A) > .45 ? A.side : 0;
+    return A && A.type === 'shift' && !A.fake && shiftAmount(A) > .45 ? A.side : 0;
   }
+  keeperFake() { const A = this.keeper.anim; return A && A.type === 'shift' && A.fake && shiftAmount(A) > .3 ? A.side : 0; } // 속임수로 기운 쪽
   // 쓸어 올린 각도 → 골대 위 가로 위치(x, m). 똑바로 위 = 가운데, 약 22~28° 기울이면 구석, 30° 넘으면 골대 밖
   swipeAim(sw) { return clamp(6.4 * Math.tan(Math.atan2(sw.dx, -sw.dy)), -9, 9); }
   // 쓸어 올린 빠르기 → 힘 (0 ~ 1.35). 화면 높이 기준 초당 몇 배를 쓸었는지로 잰다 (휴대폰마다 화면 크기가 달라도 같게)
@@ -889,7 +904,7 @@ export class Game {
     const p = sw.key ? .75 : this.shotPower(sw);
     if (!sw.key && this.lastVN) this.learnSwipe(this.lastVN); // 이번 쓸기는 다음 슛부터 반영
     const rt = Math.max(0, Math.round((sw.t ?? performance.now()) - r.onsetReal));
-    const lean = this.keeperLean();
+    const lean = this.keeperLean(), fakeLean = this.keeperFake();
     const y = 0.15 + 2.5 * clamp((p - 0.3) / 0.75, 0, 1.25); // 골라인에서 공 높이: 세게 찰수록 높다
     const s = 11 + 18 * Math.min(p, 1.2);                      // 공 빠르기 (m/s)
     const T = Math.hypot(x - b0.x, -HL - b0.z) / s;
@@ -899,6 +914,7 @@ export class Game {
     const P = { x: b0.x + (x - b0.x) * f, z: b0.z + (-HL - b0.z) * f }; // 그 지점 (경기장 좌표)
     const off = Math.abs(xc - kl), side = Math.sign(xc - kl) || 1;
     let rd = K.rd; if (lean === side) rd = 0; else if (lean === -side) rd += .25; // 기운 쪽이면 바로, 반대쪽이면 역동작
+    else if (fakeLean === -side) rd = Math.max(.02, rd - .04); // 속임수에 속아 반대로 차면: 골키퍼는 기다리고 있었다
     let reach = Math.min(3, .9 + Math.max(0, tc - rd) * K.vd);
     if (yc > 2.1 && off > 1.2) reach -= .3; // 높은 구석은 손이 덜 닿는다
     let out;
@@ -907,7 +923,7 @@ export class Game {
     else if (off <= reach + .12) out = Math.random() < .5 ? 'save' : 'goal'; // 손끝 승부
     else if (Math.abs(x) > POST - .13 || y > BAR - .13) out = Math.random() < .35 ? 'postIn' : 'post';
     else out = 'goal';
-    r.shot = { x, tl, y, p, lean, side, out, rt, xc, off, reach, tc, rd, kx: kl, kz: kd, bz: bd, a: this.shotSpot?.a || 0 }; r.correct = out === 'goal' || out === 'postIn';
+    r.shot = { x, tl, y, p, lean, fakeLean, side, out, rt, xc, off, reach, tc, rd, kx: kl, kz: kd, bz: bd, a: this.shotSpot?.a || 0 }; r.correct = out === 'goal' || out === 'postIn';
     this.world.kickBoot(x < 0 ? -1 : 1, 1.3); this.audio.kick(.6 + .45 * Math.min(1, p));
     this.ui.pop(`슛 파워 ${Math.round(Math.min(p, 1.35) * 100)}%`, 'small');
     // 골키퍼: rd 초 뒤 공 쪽으로 몸을 날린다 (정면이면 그 자리에서 잡는다)
@@ -973,6 +989,7 @@ export class Game {
     const why = sh.out === 'over' ? '너무 세게 찼어요 · 크로스바 위로' : sh.out === 'wide' ? '골대 밖으로 나갔어요 · 조금 더 안쪽으로'
       : sh.out === 'post' ? '골대를 맞았어요! 아깝다'
       : sh.lean && sh.lean === sh.side ? '골키퍼가 기운 쪽으로 찼어요 · 반대로!'
+      : sh.fakeLean && sh.fakeLean === -sh.side ? '골키퍼 속임수였어요 · 크게 기울 때만 반대로!'
       : sh.p < .45 ? '너무 약해요 · 더 빠르게 쓸어요'
       : Math.abs(sh.tl ?? sh.x) < 1.8 ? '골키퍼 정면이에요 · 구석으로!'
       : sh.a && Math.sign(sh.x) === sh.a ? '가까운 쪽은 골키퍼가 막아요 · 먼 쪽 구석으로!' : '골키퍼가 막았어요 · 기울 때 반대 구석으로';
