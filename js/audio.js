@@ -22,6 +22,12 @@ export class AudioFX {
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
   }
+  // 2.5.1: 화면이 안 보이면(다른 탭·앱) 소리를 통째로 멈춘다 — 게임은 멈췄는데 관중 소리만 뒤에서 계속 도는 일 막기
+  sleep(on) {
+    if (!this.ctx) return;
+    if (on) { this._wake = this._wake || this.ctx.state === 'running'; if (this.ctx.state === 'running') this.ctx.suspend(); }
+    else if (this._wake) { this._wake = false; this.ctx.resume(); }
+  }
   setMode(m) { this.mode = m; if (this.master) this.master.gain.value = m === 'off' ? 0 : m === 'quiet' ? .4 : .9; }
   setDuck(on) { this.duck = on ? .45 : 1; this.crowdLevel(this._ex ?? .3); }
   // 관중 녹음: 경기 분위기(0~1)에 따라 웅성거림(crowd)은 조금, 함성(crowdhi)은 슛·골 때(0.5 넘을 때)만 커진다

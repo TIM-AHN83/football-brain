@@ -122,7 +122,7 @@ async function boot() {
   window.FB = { world, game, voice, sensors, ui, audio }; // 테스트용
   window.addEventListener('resize', () => world.resize());
   document.addEventListener('pointerdown', () => { if (!audio.ctx || audio.ctx.state === 'suspended') audio.unlock(); }, { passive: true });
-  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pauseGame(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pauseGame(); audio.sleep(document.hidden); }); // 안 보이면 소리도 멈춤 (2.5.1)
   progress(90, '하늘·잔디 사진 불러오는 중…');
   await Promise.race([photosReady, new Promise(r => setTimeout(r, 8000))]); // 느린 망이면 그림 하늘로 먼저 시작
   requestAnimationFrame(loop);
