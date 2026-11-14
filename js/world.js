@@ -596,7 +596,7 @@ export class World {
   setExcite(v, hold = 0) { this.excite = Math.max(this.excite, v); this.exciteHold = hold; }
 
   resize() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = window.innerWidth || 390, h = window.innerHeight || 844; // 2.5: 화면 크기가 0(숨은 탭·전환 중)이면 폰 비율로 — 0/0 이면 선수 자리가 NaN 이 된다
     this.renderer.setSize(w, h, false);
     const asp = w / h; this.camera.aspect = asp;
     if (asp < 1) { // 세로 화면: 가로 시야 ~52°, 세로 최대 92°

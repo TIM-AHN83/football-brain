@@ -127,9 +127,10 @@ export class UI {
     if (zone) this.el.hint.querySelector(`[data-z="${zone}"]`)?.classList.add('pulse');
   }
   // 새 기술 카드: 그림 + 하는 법 + 진짜 경기에서. onGo = '해 볼게요!' (null 이면 숨김)
-  teach(rule, onGo) {
+  teach(rule, onGo, note) {
     const t = this.el.teach; if (!t) return;
     if (!rule) { t.hidden = true; return; }
+    const sm = $('#teach-go small'); if (sm) sm.textContent = note || '처음 2번은 연습 · 틀려도 괜찮아요'; // 2.5: 1:1 대결은 연습 없음
     const c = TEACH[rule] || TEACH.pass;
     $('#teach-tag').textContent = c.tag; $('#teach-title').textContent = c.title;
     $('#teach-how').innerHTML = c.how; $('#teach-real').textContent = '⚽ ' + c.real;

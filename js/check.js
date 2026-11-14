@@ -1,10 +1,11 @@
 // 기기 점검 (2.3): 설정의 '기기 점검' 또는 주소 끝 ?check
-// (1) 기기·로딩 정보 (2) 20초 동안 실제 속도로 자동 플레이 → 화면 초당 장면 수(FPS) (3) 규칙 점검(자동 회귀 시험 22가지)
+// (1) 기기·로딩 정보 (2) 20초 동안 실제 속도로 자동 플레이 → 화면 초당 장면 수(FPS) (3) 규칙 점검(자동 회귀 시험 24가지, 2.5에서 1:1 대결 2가지 추가)
 // 점검 중 바뀐 기기 저장값(기록·성장·연습)은 끝나면 그대로 되돌린다. 랭킹에는 올리지 않는다.
 import { store } from './store.js';
 import { CONFIG } from './config.js';
 import { applyRun } from './career.js';
 import { weeklyReport } from './report.js';
+import { duelState } from './duel.js';
 
 const P = 'fb1_';
 function snapshot() { const s = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(P)) s[k] = localStorage.getItem(k); } return s; }
@@ -137,6 +138,20 @@ export function regression(game, world) {
     game.quit(); game.start('wall', { level: 1 }); game.event = null;
     until(() => game.rally && game.rally.kind === 'wall' && game.phase === 'decide' && dist() < 3.6, 60 * 25);
     r = act(game.rally?.answer); ok('훈련장 2대1: 원 안에서 → 성공', r && r.correct);
+    // 2.5 1:1 대결: 같은 번호(씨앗)면 두 폰이 같은 장면 · 결과 판정
+    const scenes = (seed) => {
+      game.quit(); game.start('duel', { level: 7, duel: { seed, onRound() {} } }); game.event = null;
+      const s = [];
+      for (let a = 0; a < 3; a++) for (let n = 0; n < 3; n++) { game.round = { kind: 'atk', i: a }; game.rallyN = n; game.reseed(game.rtag() + 'r' + n); const x = game.makeRally(); s.push([x.kind, x.side, x.answer, x.block || '', Math.round(x.build)].join('/')); }
+      game.round = { kind: 'atk', i: 1 }; game.reseed(game.rtag() + 's'); s.push('shot' + game.pickShotAngle());
+      return s.join(' ');
+    };
+    const s1 = scenes('chk-a'), s2 = scenes('chk-a'), s3 = scenes('chk-b');
+    ok('1:1 대결: 같은 번호면 같은 장면 · 다른 번호면 다른 장면', s1 === s2 && s1 !== s3);
+    const G = (a) => a.map(g => ({ goal: !!g, pts: 100 }));
+    const d1 = duelState(G([1, 0, 1, 0, 1, 0, 0, 0]), G([0, 1, 0, 1, 0, 0, 0, 0])), d2 = duelState(G([1, 0, 0, 0, 0, 0, 0, 0]), G([0, 1, 0, 0, 0, 0, 0, 0]));
+    const d3 = duelState(G([1, 0, 0, 0, 0, 0, 0, 0, 1, 1]), G([0, 1, 0, 0, 0, 0, 0, 0, 0, 0]));
+    ok('1:1 대결: 3:2 승리 · 동점은 승부차기 · 승부차기 2:0이면 끝', d1.over && d1.win === 1 && !d2.over && d2.next?.kind === 'pk' && d3.over && d3.by === 'pk');
     // 성장·리포트 계산 (저장값은 끝나고 되돌린다)
     const c = applyRun({ mode: 'challenge', score: 4000, level: 4, goals: 3, fwdPasses: 4, scanSeen: 2, wrongfoot: 1, fastAttacks: 1, bestStreak: 6, axes: {} });
     const rep = weeklyReport(store.get('history', []), 4);

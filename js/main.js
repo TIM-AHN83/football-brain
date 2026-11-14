@@ -16,6 +16,7 @@ import { load as loadCareer, todayMissions, streakNow, kitOf, setKitChoice, star
 import { weekInfo } from './events.js';
 import { runCheck, reportText } from './check.js';
 import { weeklyReport, reportCard } from './report.js';
+import { DuelUI, cleanRoom } from './duel.js';
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
@@ -47,6 +48,15 @@ const statsOn = () => settings.stats !== false && !PREVIEW && !params.get('demo'
 const track = (kind, data) => { if (statsOn()) Board.log(kind, data, statId(), CONFIG.version); };
 let checking = false, bot = null;
 const club = new ClubUI({ ui, preview: PREVIEW, needProfile: () => openProfile('club'), openRanking: (tab) => openRanking(tab) });
+// 2.5 1:1 대결: 친구와 각자 폰으로 (duel.js). 대결 레벨 후보 = 이어 하기 레벨(최고 레벨 −2), 두 사람 중 낮은 쪽으로 한다
+const duel = new DuelUI({ ui, preview: PREVIEW, profile: () => getProfile(), myLevel: () => Math.max(1, startLevelFor()), getGame: () => game,
+  startMatch: (m) => startDuelMatch(m), track: (k, d) => track(k, d), local: params.get('duelnet') === 'local' });
+if (params.get('duel')) store.set('pendingDuel', cleanRoom(params.get('duel'))); // 카톡 등으로 받은 대결 초대 링크 (?duel=방번호)
+function openPendingDuel() {
+  const room = store.get('pendingDuel', ''); if (!room || PREVIEW) return;
+  if (!getProfile()) return openProfile('duel');
+  store.set('pendingDuel', ''); duel.open(room);
+}
 let inviteShown = false;
 const bootFill = $('#boot-fill'), bootMsg = $('#boot-msg');
 const progress = (p, m) => { bootFill.style.width = p + '%'; if (m) bootMsg.textContent = m; window.__fbLog?.(`BOOT ${p}% ${m || ''}`); };
@@ -111,6 +121,7 @@ async function boot() {
   };
   window.FB = { world, game, voice, sensors, ui, audio }; // 테스트용
   window.addEventListener('resize', () => world.resize());
+  document.addEventListener('pointerdown', () => { if (!audio.ctx || audio.ctx.state === 'suspended') audio.unlock(); }, { passive: true });
   document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') pauseGame(); });
   progress(90, '하늘·잔디 사진 불러오는 중…');
   await Promise.race([photosReady, new Promise(r => setTimeout(r, 8000))]); // 느린 망이면 그림 하늘로 먼저 시작
@@ -123,6 +134,7 @@ async function boot() {
   track('open', { first: !store.get('opened', false), ref: params.get('vs') ? 'vs' : params.get('club') ? 'club' : null, inapp: inApp, mobile: isMobile, games: store.get('games', 0) });
   store.set('opened', true);
   if (params.has('check')) setTimeout(openCheck, 900);
+  if (store.get('pendingDuel', '')) setTimeout(openPendingDuel, 900);
   $('#ver-line').textContent = `버전 ${CONFIG.version} · 시범 운영(베타)`;
 }
 
@@ -215,6 +227,7 @@ $('#profile-form').addEventListener('submit', (e) => {
   setProfile({ nick: nick.slice(0, 12), age: ageSeg.get() || 'u10', team: $('#in-team').value.trim().replace(/[<>]/g, '').slice(0, 16), num });
   renderPlayerCard(); ui.close('scr-profile');
   if (pendingMode === 'club') { pendingMode = null; club.open(); }
+  else if (pendingMode === 'duel') { pendingMode = null; audio?.unlock(); if (store.get('pendingDuel', '')) openPendingDuel(); else duel.open(); }
   else if (pendingMode) { const m = pendingMode; pendingMode = null; openSetup(m); }
 });
 
@@ -243,6 +256,22 @@ function openSetup(mode, level = 1) {
   ui.open('scr-setup');
 }
 $('#btn-challenge').addEventListener('click', () => { if (!getProfile()) return openProfile('challenge'); openSetup('challenge'); });
+$('#btn-duel').addEventListener('click', () => { audio?.unlock(); if (!getProfile()) return openProfile('duel'); duel.open(); });
+
+// ---------- 1:1 대결 킥오프 (방장이 '경기 시작'을 누르면 두 폰에서 동시에) ----------
+// 음성 콜·발 센서·폰 돌리기는 끈다: 두 사람이 같은 조건(화면 누르기·쓸기)으로, 권한 창 없이 바로 시작
+function startDuelMatch(m) {
+  document.querySelectorAll('.sheet-screen.show').forEach(s => ui.close(s.id));
+  if (state === 'play' || state === 'paused') game.quit();
+  audio.unlock(); audio.crowdOn(true); voice.stop(); audio.setDuck(false);
+  game.opts.voice = false; game.opts.motion = false; game.opts.gyro = false; game.event = null; game.forceShot = false;
+  navigator.wakeLock?.request('screen').then(w => { wakeLock = w; }).catch(() => {});
+  ui.go('none'); game.endCinematic(); game.look.drag = 0; game.look.key = 0;
+  lastMode = 'duel'; world.setWeather(weatherFor());
+  track('play', { mode: 'duel', lv: m.level, n: store.get('games', 0) });
+  game.start('duel', { level: m.level, duel: { seed: m.seed, onRound: m.onRound } });
+  ui.mic(null); gestures.enabled = true; gestures.reset(); state = 'play';
+}
 
 // ---------- 30초 따라 하기 (등록·권한 없이 바로) ----------
 function startTutorial() {
@@ -296,20 +325,24 @@ async function kickoff() {
 function pauseGame() { if (state !== 'play') return; state = 'paused'; game.pause(true); gestures.enabled = false; ui.open('scr-pause'); }
 $('#btn-pause').addEventListener('click', pauseGame);
 $('#btn-resume').addEventListener('click', () => { ui.close('scr-pause'); game.pause(false); gestures.enabled = true; gestures.reset(); state = 'play'; });
-$('#btn-quit').addEventListener('click', () => { ui.close('scr-pause'); endSession(); game.quit(); showTitle(); });
+$('#btn-quit').addEventListener('click', () => { ui.close('scr-pause'); if (lastMode === 'duel') { duel.leave(); duel.hudOff(); } endSession(); game.quit(); showTitle(); }); // 대결 중이면 친구는 기권승
 function endSession() { gestures.enabled = false; voice.stop(); audio.setDuck(false); audio.crowdOn(false); ui.mic(null); try { wakeLock?.release(); } catch (e) { /* 무시 */ } wakeLock = null; }
 
 // ---------- 결과 ----------
 function onEnd(sum) {
   if (checking) return; // 기기 점검 중에는 결과·기록을 남기지 않는다
-  endSession(); lastSummary = sum; state = 'result';
+  endSession(); duel.hudOff(); lastSummary = sum; state = 'result';
   const games = store.get('games', 0) + 1; store.set('games', games);
-  track('end', { mode: sum.mode, lv: sum.level, start: sum.startLevel, score: sum.score, dur: sum.duration, acc: sum.accuracy, n: games, fwd: sum.fwd, wall: sum.wall, thru: sum.thru });
+  const isDuel = sum.mode === 'duel';
+  track('end', { mode: sum.mode, lv: sum.level, start: sum.startLevel, score: sum.score, dur: sum.duration, acc: sum.accuracy, n: games, fwd: sum.fwd, wall: sum.wall, thru: sum.thru,
+    duel: isDuel && sum.duel ? [sum.duel.me, sum.duel.op, sum.duel.win, sum.duel.reason] : undefined });
   lastBest = addHistory(sum);
   ui.renderResult(sum); ui.go('scr-result');
+  $('#btn-again span').textContent = isDuel ? '다시 붙기' : '다시 도전'; $('#btn-again').disabled = false; $('#btn-share').hidden = isDuel;
+  duel.renderResult(isDuel ? sum.duel : null); // 1:1 대결: 골 스코어 · 공격마다 ⚽/✕ · 다시 붙기
   try { ui.renderCareerLine(applyRun(sum)); } catch (e) { console.error(e); ui.renderCareerLine(null); } // 경험치·미션·배지
   $('#btn-submit').hidden = true; $('#btn-submit').disabled = false;
-  $('#submit-msg').textContent = sum.ranked ? '' : '훈련장 기록은 랭킹에 들어가지 않아요.';
+  $('#submit-msg').textContent = sum.ranked ? '' : isDuel ? '1:1 대결 기록은 랭킹에 들어가지 않아요.' : '훈련장 기록은 랭킹에 들어가지 않아요.';
   renderResRank(null);
   $('#scr-result').scrollTop = 0;
   // 챌린지 기록은 개인 랭킹에 자동 등록 (클럽 회원이면 팀 점수에도 같이). 개발용 ?demo 화면은 실제 랭킹에 올리지 않는다
@@ -379,8 +412,11 @@ async function submitScore() {
   }
 }
 $('#btn-submit').addEventListener('click', () => submitScore());
-$('#btn-again').addEventListener('click', () => { track('again', { mode: lastMode, n: store.get('games', 0) }); showTitle(); openSetup(lastMode, setupLevel); });
-$('#btn-home').addEventListener('click', showTitle);
+$('#btn-again').addEventListener('click', () => {
+  if (lastMode === 'duel') { duel.rematch(); return; } // 같은 친구와 한 판 더 (둘 다 누르면 시작)
+  track('again', { mode: lastMode, n: store.get('games', 0) }); showTitle(); openSetup(lastMode, setupLevel);
+});
+$('#btn-home').addEventListener('click', () => { if (lastMode === 'duel') duel.leave(); showTitle(); });
 $('#btn-share').addEventListener('click', async () => {
   const s = lastSummary; if (!s) return;
   if (PREVIEW) { ui.toast('미리보기 링크에서는 공유가 막혀 있어요'); return; }
@@ -586,5 +622,5 @@ if (params.has('debug')) window.addEventListener('keydown', (e) => {
 });
 
 const booted = boot();
-if (params.has('debug')) booted.then(() => { window.__fb = { game, world, ui, Board, club }; });
+if (params.has('debug')) booted.then(() => { window.__fb = { game, world, ui, Board, club, duel }; });
 if (params.get('demo')) booted.then(() => setTimeout(() => demo(params.get('demo')), 700));
